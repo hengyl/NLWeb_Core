@@ -1,0 +1,86 @@
+[
+  {
+    "template": "What is the <variable> in the <place>",
+    "extract": {
+      "score": "score",
+      "variable": "variable being asked for",
+      "place": "name of place",
+      "chartTitle": "The title of the chart"
+    },
+    "action": {
+      "type": "highlight",
+      "params": ["place", "variable"]
+    }
+  },
+  {
+    "template": "Which <placeType> in <place> has the highest <variable>",
+    "extract": {
+      "score": "score",
+      "place": "name of containing place",
+      "variable": "variable being asked for",
+      "placeType": "type of place (like county, etc.)",
+      "chartTitle": "The title of the chart"
+    },
+    "action": {
+      "type": "ranking",
+      "params": ["place", "placeType", "variable"]
+    }
+  },
+  {
+    "template": "What is the correlation between <variable1> and <variable2> across <placeType> in <place>",
+    "extract": {
+      "score": "score",
+      "variable1": "first variable",
+      "variable2": "second variable",
+      "place": "containing place",
+      "placeType": "place type like US counties",
+      "chartTitle": "The title of the chart"
+    },
+    "action": {
+      "type": "scatter",
+      "params": ["variable1", "variable2", "placeType"]
+    }
+  },
+  {
+    "template": "How does <variable> in <place1> compare to <place2>?",
+    "extract": {
+      "score": "score",
+      "place1": "name of place",
+      "place2": "name of place",
+      "variable": "variable",
+      "chartTitle": "The title of the chart"
+    },
+    "action": {
+      "type": "bar",
+      "params": ["variable", "place1", "place2"]
+    }
+  },
+  {
+    "template": "Which <placeType> in <place> has the lowest <variable>",
+    "extract": {
+      "score": "score",
+      "place": "name of containing place",
+      "variable": "variable being asked for",
+      "placeType": "type of place (like county, etc.)",
+      "chartTitle": "The title of the chart"
+    },
+    "action": {
+      "type": "ranking",
+      "params": ["place", "variable"]
+    }
+  },
+  {
+    "template": "Show me <variable> across <placeType> in <containingPlace>",
+    "extract": {
+      "score": "score",
+      "variable": "variable",
+      "placeType": "type of place",
+      "containingPlace": "The containing place, implicit or explicit",
+      "chartTitle": "The title of the chart"
+    },
+    "action": {
+      "type": "map",
+      "params": ["variable", "placeType"]
+    }
+  }
+]
