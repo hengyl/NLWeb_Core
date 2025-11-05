@@ -30,11 +30,11 @@ fi
 
 # Package upload order (respects dependencies)
 PACKAGES=(
-    "packages/dataload"           # Standalone, no dependencies
     "packages/core"               # Core framework
+    "packages/dataload"           # Standalone, depends on core for Azure providers
     "packages/network"            # Depends on core
-    "packages/providers/azure/vectordb"   # Depends on dataload (optional)
     "packages/providers/azure/models"     # Depends on core (optional)
+    "packages/providers/azure/vectordb"   # Depends on core (optional)
     "packages/bundles/retrieval"  # Depends on core + all retrieval providers
     "packages/bundles/models"     # Depends on core + all model providers
 )

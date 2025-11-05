@@ -31,6 +31,9 @@ retrieval:
   api_endpoint_env: AZURE_SEARCH_ENDPOINT
   auth_method: azure_ad
   index_name: embeddings1536
+  writer:
+    import_path: nlweb_azure_vectordb.azure_search_writer
+    class_name: AzureSearchWriter
 
 server:
   host: localhost

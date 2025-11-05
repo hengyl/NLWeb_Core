@@ -1,0 +1,265 @@
+# Copyright (c) 2025 Microsoft Corporation.
+# Licensed under the MIT License
+
+"""
+Database loading functions for NLWeb.
+
+Load schema.org JSON files or RSS feeds into vector databases with
+automatic embedding generation.
+"""
+
+import json
+import asyncio
+from typing import Optional, List, Dict, Any
+from pathlib import Path
+
+from .embedding import get_embedding
+from .writer import get_vector_db_writer
+from .rss2schema import parse_rss_to_schema
+
+
+async def load_to_db(
+    file_path: str,
+    site: str,
+    endpoint_name: Optional[str] = None,
+    batch_size: int = 100,
+    file_type: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Load schema.org data from JSON or RSS file into vector database.
+
+    Args:
+        file_path: Path to JSON or RSS file (local or URL)
+        site: Site identifier for all documents
+        endpoint_name: Optional endpoint name (defaults to write_endpoint from config)
+        batch_size: Number of documents to upload per batch
+        file_type: Optional file type hint ('json' or 'rss'), auto-detected if not provided
+
+    Returns:
+        Dict with loading results (total_loaded, errors)
+
+    Example:
+        # Load JSON file
+        result = await load_to_db("recipes.json", site="seriouseats")
+
+        # Load RSS feed
+        result = await load_to_db("https://example.com/feed.xml", site="example", file_type="rss")
+    """
+    print(f"[DB_LOAD] Loading data from {file_path} for site={site}")
+
+    # Detect file type if not specified
+    if not file_type:
+        file_type = _detect_file_type(file_path)
+
+    # Load documents based on file type
+    if file_type == 'rss':
+        documents = await _load_from_rss(file_path, site)
+    elif file_type == 'json':
+        documents = await _load_from_json(file_path, site)
+    else:
+        raise ValueError(f"Unsupported file type: {file_type}. Use 'json' or 'rss'")
+
+    if not documents:
+        print(f"[DB_LOAD] No documents loaded from {file_path}")
+        return {'total_loaded': 0, 'errors': []}
+
+    print(f"[DB_LOAD] Loaded {len(documents)} documents, computing embeddings...")
+
+    # Compute embeddings for all documents
+    documents_with_embeddings = await _compute_embeddings(documents)
+
+    print(f"[DB_LOAD] Uploading {len(documents_with_embeddings)} documents in batches of {batch_size}...")
+
+    # Get writer and upload in batches
+    writer = get_vector_db_writer(endpoint_name)
+    total_loaded = 0
+    errors = []
+
+    for i in range(0, len(documents_with_embeddings), batch_size):
+        batch = documents_with_embeddings[i:i + batch_size]
+        try:
+            result = await writer.upload_documents(batch)
+            total_loaded += result.get('success_count', 0)
+            if result.get('error_count', 0) > 0:
+                errors.append(f"Batch {i//batch_size + 1}: {result['error_count']} errors")
+        except Exception as e:
+            error_msg = f"Batch {i//batch_size + 1} failed: {str(e)}"
+            print(f"[DB_LOAD] {error_msg}")
+            errors.append(error_msg)
+
+    print(f"[DB_LOAD] Completed: {total_loaded} documents loaded, {len(errors)} errors")
+
+    return {
+        'total_loaded': total_loaded,
+        'errors': errors
+    }
+
+
+async def delete_site(
+    site: str,
+    endpoint_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Delete all documents for a specific site.
+
+    Args:
+        site: Site identifier
+        endpoint_name: Optional endpoint name (defaults to write_endpoint from config)
+
+    Returns:
+        Dict with deletion results
+
+    Example:
+        result = await delete_site("old-site.com")
+    """
+    print(f"[DB_LOAD] Deleting all documents for site={site}")
+
+    writer = get_vector_db_writer(endpoint_name)
+    result = await writer.delete_site(site)
+
+    deleted_count = result.get('deleted_count', 0)
+    print(f"[DB_LOAD] Deleted {deleted_count} documents for site={site}")
+
+    return result
+
+
+def _detect_file_type(file_path: str) -> str:
+    """
+    Detect file type from file path/URL.
+
+    Args:
+        file_path: Path or URL to file
+
+    Returns:
+        File type ('json' or 'rss')
+    """
+    path_lower = file_path.lower()
+
+    # RSS/Atom feed patterns
+    if any(pattern in path_lower for pattern in ['.xml', '.rss', '.atom', '/feed', '/rss']):
+        return 'rss'
+
+    # JSON file patterns
+    if path_lower.endswith('.json') or path_lower.endswith('.jsonl'):
+        return 'json'
+
+    # Default to JSON
+    return 'json'
+
+
+async def _load_from_json(file_path: str, site: str) -> List[Dict[str, Any]]:
+    """
+    Load documents from JSON file.
+
+    Args:
+        file_path: Path to JSON file
+        site: Site identifier
+
+    Returns:
+        List of document dicts
+    """
+    # Handle URLs
+    if file_path.startswith('http://') or file_path.startswith('https://'):
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(file_path) as response:
+                content = await response.text()
+                data = json.loads(content)
+    else:
+        # Local file
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+    # Handle both single object and array
+    if isinstance(data, dict):
+        data = [data]
+    elif not isinstance(data, list):
+        raise ValueError(f"JSON file must contain an object or array, got {type(data)}")
+
+    # Convert to document format
+    documents = []
+    for item in data:
+        # Expect schema.org formatted data
+        if not isinstance(item, dict):
+            continue
+
+        # Extract required fields
+        url = item.get('url') or item.get('@id') or item.get('isBasedOn')
+        name = item.get('name') or item.get('headline') or 'Untitled'
+
+        if not url:
+            print(f"[DB_LOAD] Skipping item without URL: {name}")
+            continue
+
+        # Create document
+        doc = {
+            'url': url,
+            'name': name,
+            'site': site,
+            'schema_json': json.dumps(item)
+        }
+        documents.append(doc)
+
+    return documents
+
+
+async def _load_from_rss(file_path: str, site: str) -> List[Dict[str, Any]]:
+    """
+    Load documents from RSS/Atom feed.
+
+    Args:
+        file_path: Path or URL to RSS feed
+        site: Site identifier
+
+    Returns:
+        List of document dicts
+    """
+    # Parse RSS to schema.org format
+    schema_items = await parse_rss_to_schema(file_path)
+
+    # Convert to document format
+    documents = []
+    for item in schema_items:
+        url = item.get('url') or item.get('@id')
+        name = item.get('name') or item.get('headline') or 'Untitled'
+
+        if not url:
+            continue
+
+        doc = {
+            'url': url,
+            'name': name,
+            'site': site,
+            'schema_json': json.dumps(item)
+        }
+        documents.append(doc)
+
+    return documents
+
+
+async def _compute_embeddings(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Compute embeddings for all documents.
+
+    Args:
+        documents: List of document dicts (without embeddings)
+
+    Returns:
+        List of document dicts with embeddings added
+    """
+    # Compute embeddings for all documents
+    tasks = []
+    for doc in documents:
+        # Use name + description or just name for embedding
+        schema_data = json.loads(doc['schema_json'])
+        text_for_embedding = schema_data.get('description', '') or doc['name']
+        tasks.append(get_embedding(text_for_embedding))
+
+    # Get all embeddings concurrently
+    embeddings = await asyncio.gather(*tasks)
+
+    # Add embeddings to documents
+    for doc, embedding in zip(documents, embeddings):
+        doc['embedding'] = embedding
+
+    return documents

@@ -8,7 +8,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="nlweb-core",
     version="0.1.0",
-    packages=find_packages(),
+    packages=find_packages(where='packages/core') +
+             find_packages(where='packages/dataload') +
+             find_packages(where='packages/network'),
+    package_dir={
+        '': 'packages/core',
+        'nlweb_dataload': 'packages/dataload/nlweb_dataload',
+        'nlweb_network': 'packages/network/nlweb_network',
+    },
     include_package_data=True,
     python_requires=">=3.8",
     install_requires=[

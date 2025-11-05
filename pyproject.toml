@@ -79,7 +79,8 @@ Repository = "https://github.com/yourusername/NLWeb_Core"
 nlweb-server = "nlweb_core.simple_server:main"
 
 [tool.setuptools.packages.find]
-include = ["nlweb_core*"]
+where = ["packages/core", "packages/dataload", "packages/network"]
+include = ["nlweb_core*", "nlweb_dataload*", "nlweb_network*"]
 
 [tool.setuptools.package-data]
 nlweb_core = ["config/*.yaml", "config/*.xml", "config/*.txt", "config/*.json"]
