@@ -263,3 +263,60 @@ async def _compute_embeddings(documents: List[Dict[str, Any]]) -> List[Dict[str,
         doc['embedding'] = embedding
 
     return documents
+
+
+def main():
+    """
+    Command-line interface for nlweb-dataload.
+
+    Usage:
+        python -m nlweb_dataload.db_load --file <path> --site <site> [options]
+        python -m nlweb_dataload.db_load --delete-site <site> [options]
+    """
+    import argparse
+    from .config import init
+
+    parser = argparse.ArgumentParser(
+        description='Load schema.org data or RSS feeds into vector databases'
+    )
+    parser.add_argument('--file', help='Path to JSON or RSS file (local or URL)')
+    parser.add_argument('--site', help='Site identifier for documents')
+    parser.add_argument('--type', choices=['json', 'rss'], help='File type (auto-detected if not specified)')
+    parser.add_argument('--batch-size', type=int, default=100, help='Batch size for uploads (default: 100)')
+    parser.add_argument('--endpoint', help='Database endpoint name (uses write_endpoint if not specified)')
+    parser.add_argument('--config', help='Path to config.yaml (default: ./config.yaml)')
+    parser.add_argument('--delete-site', help='Delete all documents for the specified site')
+
+    args = parser.parse_args()
+
+    # Initialize config
+    init(args.config)
+
+    # Run delete or load
+    if args.delete_site:
+        result = asyncio.run(delete_site(
+            site=args.delete_site,
+            endpoint_name=args.endpoint
+        ))
+        print(f"\n✅ Deleted {result['deleted_count']} documents for site '{args.delete_site}'")
+    elif args.file and args.site:
+        result = asyncio.run(load_to_db(
+            file_path=args.file,
+            site=args.site,
+            endpoint_name=args.endpoint,
+            batch_size=args.batch_size,
+            file_type=args.type
+        ))
+        print(f"\n✅ Successfully loaded {result['total_loaded']} documents")
+        if result['errors']:
+            print(f"⚠️  {len(result['errors'])} errors occurred:")
+            for error in result['errors'][:5]:  # Show first 5 errors
+                print(f"  - {error}")
+    else:
+        parser.print_help()
+        print("\nError: Must specify either --file and --site, or --delete-site")
+        exit(1)
+
+
+if __name__ == '__main__':
+    main()
