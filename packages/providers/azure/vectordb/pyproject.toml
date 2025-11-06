@@ -24,7 +24,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "nlweb-core>=0.5.01",
+    "nlweb-core>=0.5.02",
     "azure-core",
     "azure-search-documents>=11.4.0",
     "azure-identity>=1.12.0",
