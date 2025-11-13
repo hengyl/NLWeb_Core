@@ -10,7 +10,7 @@ into vector databases with automatic embedding generation.
 Does not depend on nlweb-core - includes its own minimal config and embedding wrapper.
 """
 
-__version__ = "0.5.03"
+__version__ = "0.5.3.post1"
 
 from .config import init
 from .db_load import (
