@@ -48,6 +48,18 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 echo "  → Installing nlweb-network..."
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple nlweb-network
 
+echo "  → Installing nlweb-azure-vectordb..."
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple nlweb-azure-vectordb
+
+echo "  → Installing nlweb-elastic-vectordb..."
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple nlweb-elastic-vectordb
+
+echo "  → Installing nlweb-qdrant-vectordb..."
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple nlweb-qdrant-vectordb
+
+echo "  → Installing nlweb-azure-models..."
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple nlweb-azure-models
+
 echo ""
 echo "✅ All packages installed"
 echo ""

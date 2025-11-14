@@ -71,6 +71,8 @@ These package names will be uploaded:
 - ✅ `nlweb-core` - Core framework
 - ✅ `nlweb-network` - Network interfaces (HTTP/MCP/A2A)
 - ✅ `nlweb-azure-vectordb` - Azure AI Search provider
+- ✅ `nlweb-elastic-vectordb` - Elasticsearch provider
+- ✅ `nlweb-qdrant-vectordb` - Qdrant provider
 - ✅ `nlweb-azure-models` - Azure OpenAI provider
 - ✅ `nlweb-retrieval` - All retrieval providers bundle
 - ✅ `nlweb-models` - All model providers bundle

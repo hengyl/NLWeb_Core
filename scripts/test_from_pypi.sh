@@ -44,6 +44,12 @@ pip install --quiet nlweb-core
 echo "  → Installing nlweb-network..."
 pip install --quiet nlweb-network
 
+echo "  → Installing nlweb-elastic-vectordb..."
+pip install --quiet nlweb-elastic-vectordb
+
+echo "  → Installing nlweb-qdrant-vectordb..."
+pip install --quiet nlweb-qdrant-vectordb
+
 echo ""
 echo "✅ All packages installed"
 echo ""
@@ -215,3 +221,5 @@ echo "Users can now install with:"
 echo "  pip install nlweb-dataload"
 echo "  pip install nlweb-core"
 echo "  pip install nlweb-network"
+echo "  pip install nlweb-elastic-vectordb"
+echo "  pip install nlweb-qdrant-vectordb"
