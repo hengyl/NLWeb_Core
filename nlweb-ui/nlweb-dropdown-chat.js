@@ -374,9 +374,12 @@ export class NLWebDropdownChat {
             console.log('[NLWebDropdown] Appending message to messages container');
             this.messagesContainer.appendChild(messageDiv);
         }
-        console.log('[NLWebDropdown] Message added to DOM');
-        console.log('[NLWebDropdown] Container children count:', this.messagesContainer.children.length);
-        console.log('[NLWebDropdown] Container innerHTML preview:', this.messagesContainer.innerHTML.substring(0, 200));
+        console.log('[NLWebDropdown] Message DOM element added:', messageDiv);
+        console.log('[NLWebDropdown] All message elements in container:');
+        const allMessages = this.messagesContainer.querySelectorAll('.message');
+        allMessages.forEach((msg, index) => {
+            console.log(`  Message ${index + 1}:`, msg);
+        });
         
         // Scroll to bottom
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
