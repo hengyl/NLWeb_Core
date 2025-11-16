@@ -27,7 +27,6 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <!-- Conversations header with new button -->
                 <div class="conversations-header">
                     <h2 class="conversations-title">Conversations</h2>
                     <div class="header-buttons">
@@ -46,11 +45,20 @@
 
         <!-- Main Chat Area -->
         <main class="main-content">
-            <header class="chat-header">
-                <div class="chat-header-left">
-                    <!-- Header content removed - using centered input instead -->
+            <!-- Server Configuration Banner -->
+            <div class="server-config-banner" id="server-config-banner">
+                <div class="server-config-content">
+                    <label for="server-url-input" class="server-url-label">NLWeb Server:</label>
+                    <input 
+                        type="text" 
+                        id="server-url-input" 
+                        class="server-url-input" 
+                        placeholder="e.g., nlw.azurewebsites.net or https://nlw.azurewebsites.net"
+                        value="https://nlw.azurewebsites.net"
+                    />
+                    <span id="server-url-status" class="server-url-status"></span>
                 </div>
-            </header>
+            </div>
 
             <div class="chat-messages" id="chat-messages">
                 <div class="messages-container" id="messages-container">

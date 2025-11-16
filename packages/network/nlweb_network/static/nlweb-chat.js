@@ -8,11 +8,9 @@
 
 class NLWebChat {
     constructor(config = {}) {
-        // Use config baseUrl if provided, otherwise detect from window.location
-        // For production deployment, auto-detect the current host
-        this.baseUrl = config.baseUrl || window.location.origin;
+        this.baseUrl = this.loadServerUrl() || config.baseUrl || 'https://nlw.azurewebsites.net';
         this.defaultSite = config.defaultSite || 'imdb.com';
-        this.maxResults = config.maxResults || 10;
+        this.maxResults = config.maxResults || 50;
         this.currentStream = null;
         this.conversations = {};
         this.currentConversation = null;
@@ -20,27 +18,26 @@ class NLWebChat {
     }
 
     init() {
+        console.log('Initializing NLWeb Chat...');
         this.bindElements();
         this.attachEventListeners();
         this.loadConversations();
+        this.updateServerUrlDisplay();
         this.updateUI();
     }
 
     bindElements() {
         this.elements = {
-            // Container
-            appContainer: document.querySelector('.app-container'),
-            
+            // Server config elements
+            serverUrlInput: document.getElementById('server-url-input'),
+            serverUrlStatus: document.getElementById('server-url-status'),
+
             // Sidebar elements
             sidebar: document.getElementById('sidebar'),
             sidebarToggle: document.getElementById('sidebar-toggle'),
             mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
             conversationsList: document.getElementById('conversations-list'),
             newChatBtn: document.getElementById('new-chat-btn'),
-
-            // Header elements
-            chatTitle: document.querySelector('.chat-title'),
-            chatSiteInfo: document.getElementById('chat-site-info'),
 
             // Messages area
             chatMessages: document.getElementById('chat-messages'),
@@ -60,6 +57,16 @@ class NLWebChat {
     }
 
     attachEventListeners() {
+        // Server URL configuration - auto-save on blur and Enter
+        this.elements.serverUrlInput.onblur = () => this.saveServerUrl();
+        this.elements.serverUrlInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.saveServerUrl();
+                this.elements.serverUrlInput.blur();
+            }
+        };
+
         // Sidebar controls
         this.elements.sidebarToggle.onclick = () => this.toggleSidebar();
         this.elements.mobileMenuToggle.onclick = () => this.toggleSidebar();
@@ -90,9 +97,78 @@ class NLWebChat {
 
     // ============ UI Control Methods ============
 
+    loadServerUrl() {
+        try {
+            const stored = localStorage.getItem('nlweb_server_url');
+            return stored || null;
+        } catch (err) {
+            console.error('Error loading server URL:', err);
+            return null;
+        }
+    }
+
+    saveServerUrl() {
+        try {
+            let url = this.elements.serverUrlInput.value.trim();
+            
+            if (!url) {
+                this.showServerUrlStatus('Please enter a server URL', true);
+                return;
+            }
+
+            // Normalize the URL - add https:// if no protocol specified
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            // Validate URL format
+            try {
+                new URL(url);
+            } catch (e) {
+                this.showServerUrlStatus('Invalid URL format', true);
+                return;
+            }
+
+            // Remove trailing slash
+            url = url.replace(/\/$/, '');
+
+            // Save to localStorage and update
+            localStorage.setItem('nlweb_server_url', url);
+            this.baseUrl = url;
+            this.elements.serverUrlInput.value = url;
+            
+            this.showServerUrlStatus('✓ Saved');
+            console.log('Server URL updated to:', url);
+        } catch (err) {
+            console.error('Error saving server URL:', err);
+            this.showServerUrlStatus('Error saving URL', true);
+        }
+    }
+
+    updateServerUrlDisplay() {
+        if (this.elements.serverUrlInput) {
+            this.elements.serverUrlInput.value = this.baseUrl;
+        }
+    }
+
+    showServerUrlStatus(message, isError = false) {
+        this.elements.serverUrlStatus.textContent = message;
+        this.elements.serverUrlStatus.className = 'server-url-status' + (isError ? ' error' : '');
+        
+        // Clear status after 3 seconds
+        setTimeout(() => {
+            this.elements.serverUrlStatus.textContent = '';
+        }, 3000);
+    }
+
     toggleSidebar() {
-        this.elements.sidebar.classList.toggle('collapsed');
-        this.elements.appContainer.classList.toggle('sidebar-collapsed');
+        // For mobile, use 'active' class; for desktop, use 'collapsed' class
+        if (window.innerWidth <= 768) {
+            this.elements.sidebar.classList.toggle('active');
+        } else {
+            this.elements.sidebar.classList.toggle('collapsed');
+            this.elements.sidebarToggle.classList.toggle('collapsed');
+        }
     }
 
     startNewChat() {
@@ -122,15 +198,6 @@ class NLWebChat {
     }
 
     updateUI() {
-        // Update header (only if elements exist)
-        if (this.elements.chatTitle && this.currentConversation) {
-            this.elements.chatTitle.textContent = this.currentConversation.title;
-        }
-        if (this.elements.chatSiteInfo) {
-            const site = this.currentConversation?.site || 'all';
-            this.elements.chatSiteInfo.textContent = `Asking ${site}`;
-        }
-
         // Show/hide input areas
         const hasMessages = this.currentConversation && this.currentConversation.messages.length > 0;
         this.elements.centeredInputContainer.style.display = hasMessages ? 'none' : 'flex';
@@ -240,17 +307,14 @@ class NLWebChat {
             url.searchParams.set('site', site);
             url.searchParams.set('max_results', this.maxResults);
             url.searchParams.set('mode', 'list');
-            
-            // Add previous queries from conversation (exclude the current assistant message placeholder)
-            const previousQueries = this.currentConversation.messages
-                .slice(0, -1) // Exclude the assistant message placeholder we just added
-                .filter(msg => msg.role === 'user')
-                .map(msg => msg.content);
-            
-            if (previousQueries.length > 1) {
-                // Join all previous queries except the current one with commas
-                url.searchParams.set('prev', previousQueries.slice(0, -1).join(','));
-            }
+
+            console.log('=== NLWeb Request ===');
+            console.log('URL:', url.toString());
+            console.log('Query:', query);
+            console.log('Site:', site);
+            console.log('Max Results:', this.maxResults);
+            console.log('Mode: list');
+            console.log('====================');
 
             // Create EventSource for SSE
             this.currentStream = new EventSource(url.toString());
@@ -274,8 +338,6 @@ class NLWebChat {
                             
                             // Only add resource items (skip text items)
                             if (item.type === 'resource' && item.resource && item.resource.data) {
-                                console.log('Resource data:', item.resource.data);
-                                console.log('Score in data:', item.resource.data.score);
                                 assistantMessage.content.push(item.resource.data);
                             }
                         });
@@ -412,7 +474,7 @@ class NLWebChat {
         const content = document.createElement('div');
         content.className = 'item-content';
         
-        // Title row with link and score
+        // Title row with link
         const titleRow = document.createElement('div');
         titleRow.className = 'item-title-row';
         const titleLink = document.createElement('a');
@@ -421,15 +483,6 @@ class NLWebChat {
         titleLink.textContent = data.name || data.title || data.description?.substring(0, 50) + '...' || 'Result';
         titleLink.target = '_blank';
         titleRow.appendChild(titleLink);
-        
-        // Add score badge if available
-        if (data.score !== undefined && data.score !== null) {
-            const scoreBadge = document.createElement('span');
-            scoreBadge.className = 'item-score-badge';
-            scoreBadge.textContent = `Score: ${data.score}`;
-            titleRow.appendChild(scoreBadge);
-        }
-        
         content.appendChild(titleRow);
         
         // Site link
@@ -657,6 +710,9 @@ class NLWebChat {
 }
 
 // Initialize on page load
+console.log('NLWeb Chat script loaded');
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing NLWeb Chat');
     window.nlwebChat = new NLWebChat();
+    console.log('NLWeb Chat initialized');
 });

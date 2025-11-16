@@ -6,6 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 COPY config.yaml .
 COPY packages/ packages/
+COPY nlweb-ui/ nlweb-ui/
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt

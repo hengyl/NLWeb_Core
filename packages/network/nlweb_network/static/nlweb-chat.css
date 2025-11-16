@@ -4,6 +4,7 @@
 
 /**
  * NLWeb Chat UI Styles - Full Page Layout
+ * Updated: Toggle button moved to top
  */
 
 * {
@@ -54,20 +55,20 @@ body {
 .sidebar-toggle {
     position: fixed;
     left: 260px;
-    top: 60px;
+    top: 16px;
     z-index: 100;
     background: white;
     border: 1px solid #e0e0e0;
     border-left: none;
-    border-radius: 0 8px 8px 0;
-    padding: 12px 6px;
+    border-radius: 0 6px 6px 0;
+    padding: 8px 4px;
     cursor: pointer;
     transition: left 0.3s ease;
 }
 
 .sidebar-toggle svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     display: block;
     transition: transform 0.3s ease;
 }
@@ -76,12 +77,15 @@ body {
     background: #f8f9fa;
 }
 
-/* When sidebar is hidden, move toggle to the left edge and flip arrow */
-.app-container.sidebar-collapsed .sidebar-toggle {
+/* When sidebar is collapsed, move toggle to left edge and flip arrow */
+.sidebar-toggle.collapsed {
     left: 0;
+    border-left: 1px solid #e0e0e0;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
 }
 
-.app-container.sidebar-collapsed .sidebar-toggle svg {
+.sidebar-toggle.collapsed svg {
     transform: rotate(180deg);
 }
 
@@ -93,12 +97,11 @@ body {
     border-right: 1px solid #e0e0e0;
     display: flex;
     flex-direction: column;
-    transition: transform 0.3s ease, margin-left 0.3s ease;
+    transition: margin-left 0.3s ease;
     flex-shrink: 0;
 }
 
 .sidebar.collapsed {
-    transform: translateX(-100%);
     margin-left: -260px;
 }
 
@@ -257,6 +260,57 @@ body {
     flex-direction: column;
     background: white;
     overflow: hidden;
+}
+
+/* ============ Server Configuration Banner ============ */
+
+.server-config-banner {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 12px 20px;
+}
+
+.server-config-content {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-left: 10px;
+}
+
+.server-url-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+}
+
+.server-url-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: monospace;
+    outline: none;
+    background: white;
+}
+
+.server-url-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.server-url-status {
+    font-size: 13px;
+    color: #28a745;
+    white-space: nowrap;
+    min-width: 60px;
+}
+
+.server-url-status.error {
+    color: #dc3545;
 }
 
 /* ============ Chat Header ============ */
@@ -466,7 +520,6 @@ body {
 .item-title-row {
     display: flex;
     align-items: center;
-    gap: 10px;
 }
 
 .item-title-link {
@@ -478,17 +531,6 @@ body {
 
 .item-title-link:hover {
     text-decoration: underline;
-}
-
-.item-score-badge {
-    display: inline-block;
-    background: #28a745;
-    color: white;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 12px;
-    margin-left: auto;
 }
 
 .item-site-link {
@@ -605,11 +647,15 @@ body {
         top: 0;
         bottom: 0;
         z-index: 1000;
-        transform: translateX(-100%);
+        margin-left: -260px;
     }
 
     .sidebar.active {
-        transform: translateX(0);
+        margin-left: 0;
+    }
+
+    .sidebar.collapsed {
+        margin-left: -260px;
     }
 
     .sidebar-toggle {
@@ -626,6 +672,20 @@ body {
 
     .centered-input-wrapper {
         padding: 0 15px;
+    }
+
+    .server-config-content {
+        flex-wrap: wrap;
+    }
+
+    .server-url-label {
+        width: 100%;
+        margin-bottom: 4px;
+    }
+
+    .server-url-input {
+        flex: 1;
+        min-width: 0;
     }
 }
 
