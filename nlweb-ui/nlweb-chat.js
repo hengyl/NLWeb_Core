@@ -8,7 +8,7 @@
 
 class NLWebChat {
     constructor(config = {}) {
-        this.baseUrl = config.baseUrl || 'https://nlw.azurewebsites.net';
+        this.baseUrl = this.loadServerUrl() || config.baseUrl || 'https://nlw.azurewebsites.net';
         this.defaultSite = config.defaultSite || 'imdb.com';
         this.maxResults = config.maxResults || 50;
         this.currentStream = null;
@@ -22,21 +22,22 @@ class NLWebChat {
         this.bindElements();
         this.attachEventListeners();
         this.loadConversations();
+        this.updateServerUrlDisplay();
         this.updateUI();
     }
 
     bindElements() {
         this.elements = {
+            // Server config elements
+            serverUrlInput: document.getElementById('server-url-input'),
+            serverUrlStatus: document.getElementById('server-url-status'),
+
             // Sidebar elements
             sidebar: document.getElementById('sidebar'),
             sidebarToggle: document.getElementById('sidebar-toggle'),
             mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
             conversationsList: document.getElementById('conversations-list'),
             newChatBtn: document.getElementById('new-chat-btn'),
-
-            // Header elements
-            chatTitle: document.querySelector('.chat-title'),
-            chatSiteInfo: document.getElementById('chat-site-info'),
 
             // Messages area
             chatMessages: document.getElementById('chat-messages'),
@@ -56,6 +57,16 @@ class NLWebChat {
     }
 
     attachEventListeners() {
+        // Server URL configuration - auto-save on blur and Enter
+        this.elements.serverUrlInput.onblur = () => this.saveServerUrl();
+        this.elements.serverUrlInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.saveServerUrl();
+                this.elements.serverUrlInput.blur();
+            }
+        };
+
         // Sidebar controls
         this.elements.sidebarToggle.onclick = () => this.toggleSidebar();
         this.elements.mobileMenuToggle.onclick = () => this.toggleSidebar();
@@ -86,8 +97,78 @@ class NLWebChat {
 
     // ============ UI Control Methods ============
 
+    loadServerUrl() {
+        try {
+            const stored = localStorage.getItem('nlweb_server_url');
+            return stored || null;
+        } catch (err) {
+            console.error('Error loading server URL:', err);
+            return null;
+        }
+    }
+
+    saveServerUrl() {
+        try {
+            let url = this.elements.serverUrlInput.value.trim();
+            
+            if (!url) {
+                this.showServerUrlStatus('Please enter a server URL', true);
+                return;
+            }
+
+            // Normalize the URL - add https:// if no protocol specified
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            // Validate URL format
+            try {
+                new URL(url);
+            } catch (e) {
+                this.showServerUrlStatus('Invalid URL format', true);
+                return;
+            }
+
+            // Remove trailing slash
+            url = url.replace(/\/$/, '');
+
+            // Save to localStorage and update
+            localStorage.setItem('nlweb_server_url', url);
+            this.baseUrl = url;
+            this.elements.serverUrlInput.value = url;
+            
+            this.showServerUrlStatus('✓ Saved');
+            console.log('Server URL updated to:', url);
+        } catch (err) {
+            console.error('Error saving server URL:', err);
+            this.showServerUrlStatus('Error saving URL', true);
+        }
+    }
+
+    updateServerUrlDisplay() {
+        if (this.elements.serverUrlInput) {
+            this.elements.serverUrlInput.value = this.baseUrl;
+        }
+    }
+
+    showServerUrlStatus(message, isError = false) {
+        this.elements.serverUrlStatus.textContent = message;
+        this.elements.serverUrlStatus.className = 'server-url-status' + (isError ? ' error' : '');
+        
+        // Clear status after 3 seconds
+        setTimeout(() => {
+            this.elements.serverUrlStatus.textContent = '';
+        }, 3000);
+    }
+
     toggleSidebar() {
-        this.elements.sidebar.classList.toggle('active');
+        // For mobile, use 'active' class; for desktop, use 'collapsed' class
+        if (window.innerWidth <= 768) {
+            this.elements.sidebar.classList.toggle('active');
+        } else {
+            this.elements.sidebar.classList.toggle('collapsed');
+            this.elements.sidebarToggle.classList.toggle('collapsed');
+        }
     }
 
     startNewChat() {
@@ -117,16 +198,6 @@ class NLWebChat {
     }
 
     updateUI() {
-        // Update header
-        if (this.currentConversation) {
-            this.elements.chatTitle.textContent = this.currentConversation.title;
-            const site = this.currentConversation.site || 'all';
-            this.elements.chatSiteInfo.textContent = `Asking ${site}`;
-        } else {
-            this.elements.chatTitle.textContent = 'New chat';
-            this.elements.chatSiteInfo.textContent = 'Asking all';
-        }
-
         // Show/hide input areas
         const hasMessages = this.currentConversation && this.currentConversation.messages.length > 0;
         this.elements.centeredInputContainer.style.display = hasMessages ? 'none' : 'flex';
