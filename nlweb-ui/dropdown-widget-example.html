@@ -120,10 +120,14 @@
         </div>
         
         <div class="info-section">
-            <h2>How to use this widget on your website</h2>
-            
+            <h2>Integration Guide</h2>
+
+            <h3>Prerequisites</h3>
+            <p>The widget requires access to your NLWeb server endpoint.</p>
+
+            <h3>Basic Integration</h3>
             <p>Add the following code to your website to embed the NLWeb dropdown chat widget:</p>
-            
+
             <div class="code-block">
                 <code>&lt;!-- Include the CSS --&gt;<br>
 &lt;link rel="stylesheet" href="https://nlw.azurewebsites.net/static/nlweb-dropdown-chat.css"&gt;<br>
@@ -131,7 +135,7 @@
 &lt;!-- Create a container for the widget --&gt;<br>
 &lt;div id="nlweb-search-container"&gt;&lt;/div&gt;<br>
 <br>
-&lt;!-- Initialize the widget --&gt;<br>
+&lt;!-- Initialize the widget using ES6 modules --&gt;<br>
 &lt;script type="module"&gt;<br>
 &nbsp;&nbsp;import { NLWebDropdownChat } from 'https://nlw.azurewebsites.net/static/nlweb-dropdown-chat.js';<br>
 &nbsp;&nbsp;<br>
@@ -142,6 +146,29 @@
 &nbsp;&nbsp;&nbsp;&nbsp;endpoint: 'https://nlw.azurewebsites.net'<br>
 &nbsp;&nbsp;});<br>
 &lt;/script&gt;</code>
+            </div>
+
+            <h3>Alternative: Self-Hosted Files</h3>
+            <p>If you prefer to host the files yourself, download the following files and update the URLs accordingly:</p>
+            <ul>
+                <li><code>nlweb-dropdown-chat.css</code> - Widget styles</li>
+                <li><code>nlweb-dropdown-chat.js</code> - Widget JavaScript (ES6 module)</li>
+            </ul>
+
+            <h3>Programmatic Control</h3>
+            <p>Once initialized, you can interact with the widget programmatically:</p>
+            <div class="code-block">
+                <code>// Trigger a search programmatically<br>
+chat.search('What is machine learning?');<br>
+<br>
+// Pre-fill the search input<br>
+chat.setQuery('How do I...');<br>
+<br>
+// Change the search scope<br>
+chat.setSite('documentation');<br>
+<br>
+// Clear conversation history<br>
+chat.clearHistory();</code>
             </div>
             
             <h3>Configuration Options</h3>
