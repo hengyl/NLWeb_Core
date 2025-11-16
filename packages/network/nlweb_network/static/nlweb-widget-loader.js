@@ -19,7 +19,8 @@
         baseUrl: 'https://nlw.azurewebsites.net',
         containerId: 'nlweb-search-container',
         site: 'all',
-        placeholder: 'Ask a question...'
+        placeholder: 'Ask a question...',
+        responseType: 'auto' // 'auto' | 'sse' | 'json' - auto-detect by default
     };
 
     // Main widget object
@@ -52,7 +53,8 @@
                     containerId: config.containerId,
                     site: config.site,
                     placeholder: config.placeholder,
-                    endpoint: config.baseUrl
+                    endpoint: config.baseUrl,
+                    responseType: config.responseType
                 });
 
                 console.log('NLWebWidget: Initialized successfully');
@@ -98,7 +100,8 @@
                 containerId: container.id || 'nlweb-search-container',
                 site: container.dataset.nlwebSite || 'all',
                 placeholder: container.dataset.nlwebPlaceholder || 'Ask a question...',
-                baseUrl: container.dataset.nlwebEndpoint || 'https://nlw.azurewebsites.net'
+                baseUrl: container.dataset.nlwebEndpoint || 'https://nlw.azurewebsites.net',
+                responseType: container.dataset.nlwebResponseType || 'auto'
             };
 
             // Ensure container has an ID

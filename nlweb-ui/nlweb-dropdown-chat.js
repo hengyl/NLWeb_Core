@@ -206,9 +206,9 @@ export class NLWebDropdownChat {
         this.addMessage('user', query);
 
         // Show loading indicator
-        this.addMessage('assistant', '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>');
+        const loadingMessage = this.addMessage('assistant', '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>');
 
-        // Send query to backend - NO ERROR HANDLING
+        // Send query to backend
         const response = await fetch(`${this.config.endpoint}/ask`, {
             method: 'POST',
             headers: {
@@ -225,17 +225,97 @@ export class NLWebDropdownChat {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        // Handle SSE streaming
+        // Remove loading indicator
+        if (loadingMessage && loadingMessage.parentNode) {
+            loadingMessage.remove();
+        }
+
+        // Detect response type and handle accordingly
+        const contentType = response.headers.get('content-type') || '';
+
+        // Check if responseType is forced in config
+        const responseType = this.config.responseType || 'auto';
+
+        if (responseType === 'json' || (responseType === 'auto' && contentType.includes('application/json'))) {
+            // Handle as single JSON response
+            await this.handleJSONResponse(response);
+        } else if (responseType === 'sse' || (responseType === 'auto' && contentType.includes('text/event-stream'))) {
+            // Handle as SSE stream
+            await this.handleSSEResponse(response);
+        } else {
+            // Auto-detect: Try to peek at the response
+            // Clone the response so we can read it twice if needed
+            const clonedResponse = response.clone();
+
+            try {
+                // Try to read as JSON first
+                const data = await clonedResponse.json();
+                await this.handleJSONResponse(null, data);
+            } catch {
+                // If JSON parsing fails, assume it's SSE
+                await this.handleSSEResponse(response);
+            }
+        }
+    }
+
+    async handleJSONResponse(response, preloadedData = null) {
+        // Get the data either from preloaded or from response
+        const data = preloadedData || await response.json();
+
+        // Parse the message using the SSE parser (it handles both formats)
+        const parsed = NLWebSSEParser.parseMessage(data);
+
+        // Create assistant message element
+        const messageElement = this.addMessage('assistant', '');
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.innerHTML = ''; // Clear any placeholder
+        }
+
+        // Handle different parsed types
+        switch (parsed.type) {
+            case 'content':
+                // Process all items
+                parsed.items.forEach(item => {
+                    if (item.type === 'resource') {
+                        const resourceElement = NLWebSSEParser.createResourceElement(item.data);
+                        contentDiv.appendChild(resourceElement);
+                    } else if (item.type === 'text' && this.config.showTextItems !== false) {
+                        // Optionally show text items if configured
+                        const textElement = document.createElement('p');
+                        textElement.textContent = item.text;
+                        contentDiv.appendChild(textElement);
+                    }
+                });
+                break;
+
+            case 'text':
+                // Legacy text response
+                contentDiv.innerHTML = parsed.text;
+                break;
+
+            default:
+                // Unknown format, show raw data
+                contentDiv.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Handle conversation ID if present
+        if (data.conversation_id) {
+            this.currentConversationId = data.conversation_id;
+        }
+
+        // Scroll to show new content
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+
+        // Show follow-up input
+        this.showFollowUpInput();
+    }
+
+    async handleSSEResponse(response) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let currentMessageElement = null;
-
-        // Remove loading indicator
-        const loadingMessages = this.messagesContainer.querySelectorAll('.assistant-message');
-        if (loadingMessages.length > 0) {
-            loadingMessages[loadingMessages.length - 1].remove();
-        }
 
         while (true) {
             const { value, done } = await reader.read();
@@ -304,25 +384,30 @@ export class NLWebDropdownChat {
                             const textDiv = currentMessageElement.querySelector('.message-content') || currentMessageElement;
                             textDiv.innerHTML += parsed.text;
                             break;
+                    }
                 }
             }
         }
 
         // Show follow-up input
+        this.showFollowUpInput();
+    }
+
+    showFollowUpInput() {
         const chatInputContainer = this.container.querySelector(`.${this.config.cssPrefix}-chat-input-container`);
         if (chatInputContainer) {
             chatInputContainer.style.display = 'block';
         }
     }
-    
+
     async sendFollowUpMessage(message) {
         // Add user message
         this.addMessage('user', message);
-        
+
         // Show loading indicator
-        this.addMessage('assistant', '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>');
-        
-        // Send to backend (similar to handleSearch)
+        const loadingMessage = this.addMessage('assistant', '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>');
+
+        // Send to backend
         try {
             const response = await fetch(`${this.config.endpoint}/ask`, {
                 method: 'POST',
@@ -340,57 +425,32 @@ export class NLWebDropdownChat {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            // Handle response (similar to handleSearch)
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let currentMessageElement = null;
-
             // Remove loading indicator
-            const loadingMessages = this.messagesContainer.querySelectorAll('.assistant-message');
-            if (loadingMessages.length > 0) {
-                loadingMessages[loadingMessages.length - 1].remove();
+            if (loadingMessage && loadingMessage.parentNode) {
+                loadingMessage.remove();
             }
 
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
+            // Detect response type and handle accordingly
+            const contentType = response.headers.get('content-type') || '';
+            const responseType = this.config.responseType || 'auto';
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop();
+            if (responseType === 'json' || (responseType === 'auto' && contentType.includes('application/json'))) {
+                // Handle as single JSON response
+                await this.handleJSONResponse(response);
+            } else if (responseType === 'sse' || (responseType === 'auto' && contentType.includes('text/event-stream'))) {
+                // Handle as SSE stream
+                await this.handleSSEResponse(response);
+            } else {
+                // Auto-detect: Try to peek at the response
+                const clonedResponse = response.clone();
 
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = JSON.parse(line.slice(6));
-                        const parsed = NLWebSSEParser.parseMessage(data);
-
-                        switch (parsed.type) {
-                            case 'content':
-                                if (!currentMessageElement) {
-                                    currentMessageElement = this.addMessage('assistant', '');
-                                    const contentDiv = currentMessageElement.querySelector('.message-content');
-                                    if (contentDiv) {
-                                        contentDiv.innerHTML = ''; // Clear loading indicator
-                                    }
-                                }
-
-                                const contentDiv = currentMessageElement.querySelector('.message-content') || currentMessageElement;
-                                parsed.items.forEach(item => {
-                                    if (item.type === 'resource') {
-                                        const resourceElement = NLWebSSEParser.createResourceElement(item.data);
-                                        contentDiv.appendChild(resourceElement);
-                                    }
-                                });
-
-                                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-                                break;
-
-                            case 'conversation_id':
-                                this.currentConversationId = parsed.conversation_id;
-                                break;
-                        }
-                    }
+                try {
+                    // Try to read as JSON first
+                    const data = await clonedResponse.json();
+                    await this.handleJSONResponse(null, data);
+                } catch {
+                    // If JSON parsing fails, assume it's SSE
+                    await this.handleSSEResponse(response);
                 }
             }
 
