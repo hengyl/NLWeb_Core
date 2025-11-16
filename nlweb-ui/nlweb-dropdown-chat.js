@@ -351,6 +351,7 @@ export class NLWebDropdownChat {
     
     addMessage(type, content) {
         console.log(`[NLWebDropdown] Adding message of type: ${type}`);
+        console.log('[NLWebDropdown] Messages container:', this.messagesContainer);
 
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}-message`;
@@ -374,6 +375,8 @@ export class NLWebDropdownChat {
             this.messagesContainer.appendChild(messageDiv);
         }
         console.log('[NLWebDropdown] Message added to DOM');
+        console.log('[NLWebDropdown] Container children count:', this.messagesContainer.children.length);
+        console.log('[NLWebDropdown] Container innerHTML preview:', this.messagesContainer.innerHTML.substring(0, 200));
         
         // Scroll to bottom
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
