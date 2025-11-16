@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nlweb-models"
-version = "0.5.4.post2"
+version = "0.5.5"
 description = "Model bundle for NLWeb - includes embedding and LLM interfaces for multiple providers"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -24,7 +24,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "nlweb-core>=0.5.4",
+    "nlweb-core>=0.5.5",
     # OpenAI (used by multiple providers)
     "openai>=1.12.0",
     # Anthropic

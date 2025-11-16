@@ -33,20 +33,20 @@ Check and update version references in:
 
 ## Version Bump Workflow
 
-### For Patch/Post Releases (e.g., 0.5.4.post1 → 0.5.4.post2)
+### For Patch/Post Releases (e.g., 0.5.4 → 0.5.4.post1)
 
 **No breaking changes - bug fixes only**
 
 ```bash
-# 1. Update all version numbers to new version (e.g., 0.5.4.post2)
+# 1. Update all version numbers to new version (e.g., 0.5.4)
 #    Edit each file listed in section 1 above
 
 # 2. Search and replace across the repo to catch any you missed:
-grep -r "0.5.4.post1" --include="*.toml" --include="*.py"
+grep -r "0.5.4" --include="*.toml" --include="*.py"
 
 # 3. Commit changes
 git add .
-git commit -m "Bump version to 0.5.4.post2"
+git commit -m "Bump version to 0.5.4"
 ```
 
 **Note**: For patch releases, dependency constraints (e.g., `nlweb-core>=0.5.4`) do NOT need to be updated.
@@ -75,10 +75,6 @@ git commit -m "Bump version to 0.5.4.post2"
 **Significant breaking changes**
 
 Follow the same process as minor version changes, but update dependency constraints to the new major version (e.g., `nlweb-core>=1.0`).
-
-## Quick Reference: Current Version
-
-**Current version: 0.5.4.post2**
 
 ## Checking Package Versions
 
