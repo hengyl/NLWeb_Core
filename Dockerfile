@@ -8,6 +8,10 @@ COPY config.yaml .
 COPY packages/ packages/
 COPY nlweb-ui/ nlweb-ui/
 
+# Copy UI files to static directory for serving
+RUN mkdir -p packages/network/nlweb_network/static && \
+    cp -r nlweb-ui/* packages/network/nlweb_network/static/
+
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
