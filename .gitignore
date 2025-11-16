@@ -43,3 +43,6 @@ htmlcov/
 # Distribution / packaging
 *.whl
 *.tar.gz
+
+# Test files
+test-dropdown-widget.html
