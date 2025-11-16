@@ -3,6 +3,7 @@
 Wrapper script to run the NLWeb server with better error handling.
 This helps diagnose startup issues in containerized environments.
 """
+import os
 import sys
 import traceback
 
@@ -11,6 +12,10 @@ def main():
         print("Starting NLWeb server...")
         print(f"Python version: {sys.version}")
         print(f"Python path: {sys.path}")
+
+        # Set the config directory to the current working directory
+        os.environ['NLWEB_CONFIG_DIR'] = os.getcwd()
+        print(f"Config directory set to: {os.getcwd()}")
 
         # Import and run the server
         from nlweb_network.server import main as server_main
