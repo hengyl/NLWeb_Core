@@ -53,12 +53,15 @@ export class NLWebDropdownChat {
             console.error('[NLWebDropdown] Container not found with ID:', this.config.containerId);
             return;
         }
-        
+
+        console.log('[NLWebDropdown] Creating DOM structure in container:', this.container);
+
         // Add container class
         this.container.classList.add(`${this.config.cssPrefix}-container`);
-        
+        console.log('[NLWebDropdown] Added class to container:', `${this.config.cssPrefix}-container`);
+
         // Create HTML structure
-        this.container.innerHTML = `
+        const htmlStructure = `
             <div class="${this.config.cssPrefix}-search-wrapper">
                 <svg class="${this.config.cssPrefix}-history-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -116,6 +119,10 @@ export class NLWebDropdownChat {
                 <div id="send-button"></div>
             </div>
         `;
+
+        console.log('[NLWebDropdown] Setting innerHTML with structure');
+        this.container.innerHTML = htmlStructure;
+        console.log('[NLWebDropdown] DOM structure created successfully');
     }
     
     setupEventHandlers() {
@@ -195,6 +202,7 @@ export class NLWebDropdownChat {
         
         // Clear messages if starting a new conversation
         if (this.messagesContainer) {
+            console.log('[NLWebDropdown] Clearing messages container and adding close button');
             this.messagesContainer.innerHTML = '<button class="' + this.config.cssPrefix + '-close" onclick="this.closest(\'.' + this.config.cssPrefix + '-results\').classList.remove(\'show\')">×</button>';
         }
 
@@ -342,22 +350,30 @@ export class NLWebDropdownChat {
     }
     
     addMessage(type, content) {
+        console.log(`[NLWebDropdown] Adding message of type: ${type}`);
+
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}-message`;
-        
+        console.log('[NLWebDropdown] Created message div with classes:', messageDiv.className);
+
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         contentDiv.innerHTML = content;
-        
+        console.log('[NLWebDropdown] Created content div with innerHTML length:', content.length);
+
         messageDiv.appendChild(contentDiv);
-        
+        console.log('[NLWebDropdown] Appended content div to message div');
+
         // Insert before the close button
         const closeButton = this.messagesContainer.querySelector(`.${this.config.cssPrefix}-close`);
         if (closeButton) {
+            console.log('[NLWebDropdown] Inserting message before close button');
             this.messagesContainer.insertBefore(messageDiv, closeButton);
         } else {
+            console.log('[NLWebDropdown] Appending message to messages container');
             this.messagesContainer.appendChild(messageDiv);
         }
+        console.log('[NLWebDropdown] Message added to DOM');
         
         // Scroll to bottom
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
@@ -398,17 +414,20 @@ export class NLWebDropdownChat {
                 return;
             }
 
+            console.log(`[NLWebDropdown] Loading ${conversations.length} conversations`);
             this.dropdownConversationsList.innerHTML = '';
-            
+
             conversations.forEach(conv => {
+                console.log(`[NLWebDropdown] Creating conversation item for: ${conv.title || 'Untitled'}`);
+
                 const item = document.createElement('div');
                 item.className = 'nlweb-dropdown-conversation-item';
                 item.dataset.conversationId = conv.id;
-                
+
                 const title = document.createElement('div');
                 title.className = 'nlweb-dropdown-conversation-title';
                 title.textContent = conv.title || 'Untitled Conversation';
-                
+
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'nlweb-dropdown-conversation-delete';
                 deleteBtn.innerHTML = '×';
@@ -416,13 +435,15 @@ export class NLWebDropdownChat {
                     e.stopPropagation();
                     this.deleteConversation(conv.id);
                 };
-                
+
                 item.appendChild(title);
                 item.appendChild(deleteBtn);
-                
+                console.log('[NLWebDropdown] Created conversation item with title and delete button');
+
                 item.onclick = () => this.loadConversation(conv.id);
-                
+
                 this.dropdownConversationsList.appendChild(item);
+                console.log('[NLWebDropdown] Appended conversation item to list');
             });
 
         } catch (error) {
@@ -450,6 +471,7 @@ export class NLWebDropdownChat {
             this.currentConversationId = conversationId;
             
             // Clear messages
+            console.log('[NLWebDropdown] Clearing messages container and adding close button');
             this.messagesContainer.innerHTML = '<button class="' + this.config.cssPrefix + '-close" onclick="this.closest(\'.' + this.config.cssPrefix + '-results\').classList.remove(\'show\')">×</button>';
             
             // Display messages
@@ -493,7 +515,8 @@ export class NLWebDropdownChat {
 
             if (this.currentConversationId === conversationId) {
                 this.currentConversationId = null;
-                this.messagesContainer.innerHTML = '<button class="' + this.config.cssPrefix + '-close" onclick="this.closest(\'.' + this.config.cssPrefix + '-results\').classList.remove(\'show\')">×</button>';
+                console.log('[NLWebDropdown] Clearing messages container and adding close button');
+            this.messagesContainer.innerHTML = '<button class="' + this.config.cssPrefix + '-close" onclick="this.closest(\'.' + this.config.cssPrefix + '-results\').classList.remove(\'show\')">×</button>';
             }
             
             this.updateConversationsList();
