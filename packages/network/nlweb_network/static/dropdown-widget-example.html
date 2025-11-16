@@ -116,39 +116,60 @@
         <div class="search-section">
             <h2>Try it out:</h2>
             <!-- This is where the widget will be embedded -->
-            <div id="nlweb-search-container"></div>
+            <div id="nlweb-search-container" data-nlweb-widget data-nlweb-site="all" data-nlweb-placeholder="Ask me anything..."></div>
         </div>
         
         <div class="info-section">
             <h2>Integration Guide</h2>
 
-            <h3>Prerequisites</h3>
-            <p>The widget requires access to your NLWeb server endpoint.</p>
-
-            <h3>Basic Integration</h3>
-            <p>Add the following code to your website to embed the NLWeb dropdown chat widget:</p>
+            <h3>Quick Start - Just 2 Lines!</h3>
+            <p>The easiest way to add the NLWeb search widget to your website:</p>
 
             <div class="code-block">
-                <code>&lt;!-- Include the CSS --&gt;<br>
-&lt;link rel="stylesheet" href="https://nlw.azurewebsites.net/static/nlweb-dropdown-chat.css"&gt;<br>
-<br>
-&lt;!-- Create a container for the widget --&gt;<br>
-&lt;div id="nlweb-search-container"&gt;&lt;/div&gt;<br>
-<br>
-&lt;!-- Initialize the widget using ES6 modules --&gt;<br>
-&lt;script type="module"&gt;<br>
-&nbsp;&nbsp;import { NLWebDropdownChat } from 'https://nlw.azurewebsites.net/static/nlweb-dropdown-chat.js';<br>
-&nbsp;&nbsp;<br>
-&nbsp;&nbsp;const chat = new NLWebDropdownChat({<br>
-&nbsp;&nbsp;&nbsp;&nbsp;containerId: 'nlweb-search-container',<br>
-&nbsp;&nbsp;&nbsp;&nbsp;site: 'all',<br>
-&nbsp;&nbsp;&nbsp;&nbsp;placeholder: 'Ask a question...',<br>
-&nbsp;&nbsp;&nbsp;&nbsp;endpoint: 'https://nlw.azurewebsites.net'<br>
+                <code>&lt;!-- That's it! Just 2 lines of HTML --&gt;<br>
+&lt;div data-nlweb-widget data-nlweb-site="all"&gt;&lt;/div&gt;<br>
+&lt;script src="https://nlw.azurewebsites.net/static/nlweb-widget-loader.js"&gt;&lt;/script&gt;</code>
+            </div>
+
+            <p>The widget will automatically initialize when the page loads. No JavaScript code needed!</p>
+
+            <h3>Customization</h3>
+            <p>Customize the widget using data attributes:</p>
+
+            <div class="code-block">
+                <code>&lt;div data-nlweb-widget<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data-nlweb-site="imdb.com"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data-nlweb-placeholder="Search movies..."&gt;<br>
+&lt;/div&gt;<br>
+&lt;script src="https://nlw.azurewebsites.net/static/nlweb-widget-loader.js"&gt;&lt;/script&gt;</code>
+            </div>
+
+            <h4>Available Options:</h4>
+            <ul>
+                <li><code>data-nlweb-site</code> - Site to search (e.g., "imdb.com" or "all")</li>
+                <li><code>data-nlweb-placeholder</code> - Search input placeholder text</li>
+                <li><code>data-nlweb-endpoint</code> - Custom NLWeb server URL (if different from default)</li>
+            </ul>
+
+            <h3>Alternative: JavaScript Control</h3>
+            <p>For more control, you can initialize the widget with JavaScript:</p>
+
+            <div class="code-block">
+                <code>&lt;div id="search"&gt;&lt;/div&gt;<br>
+&lt;script src="https://nlw.azurewebsites.net/static/nlweb-widget-loader.js"&gt;&lt;/script&gt;<br>
+&lt;script&gt;<br>
+&nbsp;&nbsp;NLWebWidget.init({<br>
+&nbsp;&nbsp;&nbsp;&nbsp;containerId: 'search',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;site: 'imdb.com',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;placeholder: 'Search movies...'<br>
+&nbsp;&nbsp;}).then(widget =&gt; {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;// Control the widget programmatically<br>
+&nbsp;&nbsp;&nbsp;&nbsp;widget.setQuery('Star Wars');<br>
 &nbsp;&nbsp;});<br>
 &lt;/script&gt;</code>
             </div>
 
-            <h3>Alternative: Self-Hosted Files</h3>
+            <h3>Legacy Integration (ES6 Modules)</h3>
             <p>If you prefer to host the files yourself, download the following files and update the URLs accordingly:</p>
             <ul>
                 <li><code>nlweb-dropdown-chat.css</code> - Widget styles</li>
@@ -213,22 +234,8 @@ chat.clearHistory();</code>
         </div>
     </div>
     
-    <!-- Initialize the widget -->
-    <script type="module">
-        import { NLWebDropdownChat } from '/static/nlweb-dropdown-chat.js';
-        
-        // Initialize the dropdown widget
-        const chat = new NLWebDropdownChat({
-            containerId: 'nlweb-search-container',
-            site: 'all',
-            placeholder: 'Ask me anything...',
-            endpoint: window.location.origin
-        });
-        
-        // You can also programmatically interact with the widget:
-        // chat.search('your query');
-        // chat.setQuery('prefill the search box');
-        // chat.setSite('specific-site');
-    </script>
+    <!-- Load the widget loader - it will auto-initialize the widget -->
+    <script src="/static/nlweb-widget-loader.js"></script>
+    <!-- That's it! The widget auto-initializes because the container has data-nlweb-widget attribute -->
 </body>
 </html>
