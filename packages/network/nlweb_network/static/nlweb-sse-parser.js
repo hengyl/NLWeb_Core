@@ -121,15 +121,38 @@ export class NLWebSSEParser {
 
         container.appendChild(content);
 
-        // Image
+        // Image - handle different formats (string, array, or object)
         if (resourceData.image) {
-            const imgWrapper = document.createElement('div');
-            const img = document.createElement('img');
-            img.src = resourceData.image;
-            img.alt = 'Item image';
-            img.className = 'item-image';
-            imgWrapper.appendChild(img);
-            container.appendChild(imgWrapper);
+            let imageUrl = null;
+
+            // Handle different image data formats
+            if (typeof resourceData.image === 'string') {
+                // Simple string URL
+                imageUrl = resourceData.image;
+            } else if (Array.isArray(resourceData.image) && resourceData.image.length > 0) {
+                // Array of URLs or objects - take first one
+                const firstImage = resourceData.image[0];
+                if (typeof firstImage === 'string') {
+                    imageUrl = firstImage;
+                } else if (firstImage && typeof firstImage === 'object') {
+                    // Could be an ImageObject with url property
+                    imageUrl = firstImage.url || firstImage.contentUrl || firstImage.src;
+                }
+            } else if (typeof resourceData.image === 'object') {
+                // ImageObject with url property
+                imageUrl = resourceData.image.url || resourceData.image.contentUrl || resourceData.image.src;
+            }
+
+            // Only create img element if we have a valid URL
+            if (imageUrl && typeof imageUrl === 'string') {
+                const imgWrapper = document.createElement('div');
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = 'Item image';
+                img.className = 'item-image';
+                imgWrapper.appendChild(img);
+                container.appendChild(imgWrapper);
+            }
         }
 
         return container;

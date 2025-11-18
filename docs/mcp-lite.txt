@@ -1,0 +1,739 @@
+MCP-lite Specification 
+
+Version: 0.042 
+
+ Status: Early Draft 
+
+1. Overview 
+
+MCP-lite is a minimal subset of the Model Context Protocol (MCP) designed for simplicity and stateless operation. Unlike full MCP, MCP-lite is transport layer - the core concepts and semantics remain consistent across different transport protocols, while the syntax adapts to each protocol's natural patterns. 
+
+The primary design goals are: 
+
+Protocol independence with consistent semantics 
+
+Stateless server architecture 
+
+Support for long-running operations via promises 
+
+Streaming capabilities for real-time responses 
+
+Allowing for typing/categorization of tools 
+
+Natural syntax for each supported protocol 
+
+The ability to extend the kind of possible responses (promises, elicitation, etc.) without significantly extending the core protocol. 
+
+2. Architecture 
+
+2.1 Transport layer independence 
+
+MCP-lite defines abstract concepts that can be implemented over multiple transport protocols. Each protocol binding maintains identical semantics while using syntax natural to that protocol. 
+
+Currently defined bindings: 
+
+HTTP: REST-like endpoints with JSON-RPC payloads 
+
+gRPC: Service methods with Protocol Buffers 
+
+Future bindings may include WebSocket, stdio or other protocols as needed. 
+
+2.2 Core Message Patterns 
+
+Regardless of transport mechanism, MCP-lite defines these fundamental message exchange patterns: 
+
+Tool Discovery: Retrieve available tools and their schemas 
+
+Tool Invocation: Execute a tool with arguments 
+
+Promise Handling: Check status/cancel of long-running operations 
+
+Streaming: Progressive delivery of results 
+
+Context: session status, memory, cookies.  
+
+3. Core Concepts  
+
+3.1 Tool Discovery 
+
+All MCP-lite implementations must provide a mechanism to discover available tools. The response contains an array of tool definitions, each including: 
+
+A unique name identifier 
+
+An optional @type field for categorization 
+
+Human-readable description 
+
+Schema defining the input parameters 
+
+An MCP-lite server that returns promises must provide the redeem tool for promise resolution.  
+
+3.2 Tool Invocation 
+
+The primary operation in MCP-lite is invoking tools with arguments. Each invocation includes: 
+
+Tool name 
+
+Arguments conforming to the tool's schema 
+
+3.3 Response Structure 
+
+All successful responses should include a _meta section with: 
+
+response_type: Enumerated string (answer|promise|elicitation|failure|request-for-more-resource) 
+
+Optional: timestamp, processing_time_ms, server_version, etc. 
+
+If there is no _meta section, the response_type is assumed to be ‘answer’ 
+
+3.4 Response Types 
+
+answer: Operation completed with final result 
+
+ promise: Long-running operation returning a redeemable token 
+
+ elicitation: Additional information required 
+
+ failure: Business logic failure (not protocol error) 
+
+3.5 Promise Mechanism 
+
+For operations exceeding typical timeout windows: 
+
+Server returns promise token immediately 
+
+Client stores token and implements retry logic 
+
+Client redeems token via the redeem tool 
+
+Server returns either final result or another promise 
+
+Promise tokens must be: 
+
+Globally unique within server namespace 
+
+Cryptographically unguessable 
+
+Time-bounded with expiration 
+
+Opaque to clients 
+
+3.6 The Redeem Tool 
+
+Required system tool with: 
+
+Name: "redeem" 
+
+@type: "system" 
+
+Required parameter: "promise" (string) 
+
+Returns: Final result or another promise 
+
+3.7 Streaming 
+
+Progressive result delivery is supported through protocol-specific mechanisms. All streams must: 
+
+Indicate partial vs. complete messages 
+
+Include final _meta section 
+
+Support graceful termination 
+
+3.8 Statelessness 
+
+Servers should not have maintain state except for promise tokens, if they are handed out. Of course, the server can include a token of some sort that the caller can refer to later (not unlike an order id in ecommerce) but communicating such a token is not part of the protocol, rather it is part of the content. 
+
+3.9 Tool Schema Requirements 
+
+Every tool definition must include: 
+
+name: Unique identifier 
+
+@type: Category. This optional parameter may be useful for the understanding the kind of tool --- search, add to cart, ... 
+
+description: Human-readable purpose 
+
+inputSchema: Validation schema in protocol-appropriate format 
+
+4. HTTP Binding 
+
+4.1 Transport Requirements 
+
+Protocol: HTTP/1.1 or HTTP/2 
+
+Method: POST only 
+
+Content-Type: application/json 
+
+Encoding: UTF-8 
+
+Base URL Pattern: https://example.com/mcp-lite/v1/ 
+
+4.2 Endpoints 
+
+4.2.1 /listtools method 
+
+Request: Empty JSON object {} 
+
+ Response: JSON array of tool definitions with JSON Schema 
+
+4.2.2 /calltoolsEndpoint 
+
+Request: JSON-RPC 2.0 format 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "unique-id", 
+  "method": "tools/call", 
+  "params": { 
+    "name": "tool_name", 
+    "arguments": {...} 
+  } 
+} 
+  
+
+Response: JSON-RPC 2.0 format with _meta in result 
+
+4.3 Streaming via SSE 
+
+Support for streaming chunked results back: Initiated with header Accept: text/event-stream. This does not support the Http Streamable /GET SSE endpoint.  
+
+Event types: 
+
+message: Partial content 
+
+done: Final message with _meta 
+
+error: Stream error 
+
+heartbeat: Keep-alive 
+
+4.4 Error Handling 
+
+Uses JSON-RPC 2.0 error codes: 
+
+-32700: Parse error 
+
+-32600: Invalid request 
+
+-32601: Method not found 
+
+-32602: Invalid params 
+
+-32603: Internal error 
+
+5. gRPC Binding 
+
+5.1 Service Definition 
+
+syntax = "proto3"; 
+package mcplite; 
+ 
+service MCPLite { 
+  rpc GetTools(Empty) returns (ToolsList); 
+  rpc CallTool(ToolRequest) returns (ToolResponse); 
+  rpc CallToolStream(ToolRequest) returns (stream ToolResponse); 
+} 
+  
+
+5.2 Message Definitions 
+
+message Empty {} 
+ 
+message Tool { 
+  string name = 1; 
+  string type = 2;  // @type field 
+  string description = 3; 
+  google.protobuf.Struct input_schema = 4; 
+} 
+ 
+message ToolsList { 
+  repeated Tool tools = 1; 
+} 
+ 
+message ToolRequest { 
+  string name = 1; 
+  google.protobuf.Struct arguments = 2; 
+} 
+ 
+message ToolResponse { 
+  google.protobuf.Struct result = 1; 
+  ResponseMeta meta = 2; 
+} 
+ 
+message ResponseMeta { 
+  ResponseType response_type = 1; 
+  string promise_token = 2;  // if response_type == PROMISE 
+  int64 timestamp = 3; 
+  int32 processing_time_ms = 4; 
+} 
+ 
+enum ResponseType { 
+  ANSWER = 0; 
+  PROMISE = 1; 
+  ELICITATION = 2; 
+  FAILURE = 3; 
+} 
+  
+
+5.3 Promise Handling 
+
+Promises return via standard ToolResponse with PROMISE type 
+
+Redeem through CallTool with "redeem" tool name 
+
+Alternative: Use CallToolStream for server-pushed updates 
+
+5.4 Streaming 
+
+Native gRPC streaming via CallToolStream: 
+
+Server sends multiple ToolResponse messages 
+
+Final message includes complete meta field 
+
+Supports backpressure and flow control 
+
+5.5 Error Handling 
+
+Uses standard gRPC status codes mapped from core concepts: 
+
+INVALID_ARGUMENT: Invalid parameters 
+
+NOT_FOUND: Tool not found 
+
+DEADLINE_EXCEEDED: Timeout (before promise) 
+
+INTERNAL: Server error 
+
+6. Protocol Selection Guidelines 
+
+Choose HTTP when: 
+
+Building web applications 
+
+Need broad compatibility 
+
+Using existing HTTP infrastructure 
+
+Requiring simple debugging 
+
+Choose gRPC when: 
+
+Building service-to-service communication 
+
+Need efficient binary protocol 
+
+Require bidirectional streaming 
+
+Want strong typing via protobuf 
+
+Implementations MAY support multiple protocols simultaneously, allowing clients to choose based on their requirements. 
+
+7. Compatibility Notes 
+
+7.1 MCP Compatibility 
+
+MCP-lite maintains semantic compatibility with full MCP: 
+
+Consistent tool invocation patterns 
+
+Same response type semantics 
+
+Compatible error classifications 
+
+Similar promise mechanisms 
+
+Protocol-specific compatibility: 
+
+HTTP binding: Wire-compatible with MCP's JSON-RPC messages 
+
+gRPC binding: New protocol, but same semantic model 
+
+7.2 Limitations 
+
+MCP-lite does not support: 
+
+Complex session management 
+
+Server-initiated messages (except in streaming) 
+
+Subscription patterns 
+
+Stateful conversation contexts 
+
+8. Items Under Consideration 
+
+8.1 /prompts Endpoint (HTTP) or GetPrompts (gRPC) 
+
+We are unsure about including prompt management in MCP-lite. The full MCP specification includes prompt management capabilities, but it's unclear whether this adds essential value in a minimal implementation. 
+
+Considerations: 
+
+Would follow the same pattern as tool discovery 
+
+Could provide pre-configured prompt templates 
+
+May be unnecessary complexity for a "lite" specification 
+
+Could be added in a future version based on implementation feedback 
+
+If included: 
+
+HTTP: POST /prompts returning prompt list 
+
+gRPC: GetPrompts() returning PromptsList 
+
+Include metadata about prompt parameters 
+
+Support prompt composition patterns 
+
+8.2 Additional Protocol Bindings 
+
+Future versions may define bindings for: 
+
+WebSocket: For persistent connections and bidirectional flow 
+
+stdio: For CLI tools and local integrations 
+
+Each would maintain the same core semantics while adapting syntax to the protocol's strengths. 
+
+Appendix A: Examples 
+
+A.1 Tool Discovery 
+
+HTTP Request: 
+
+POST /tools HTTP/1.1 
+Content-Type: application/json 
+ 
+{} 
+  
+
+HTTP Response: 
+
+{ 
+  "tools": [ 
+    { 
+      "name": "redeem", 
+      "@type": "system", 
+      "description": "Redeem a promise token to get the result of a long-running operation", 
+      "inputSchema": { 
+        "type": "object", 
+        "required": ["promise"], 
+        "properties": { 
+          "promise": { 
+            "type": "string", 
+            "description": "The promise token received from a previous operation" 
+          } 
+        } 
+      } 
+    }, 
+    { 
+      "name": "search_documents", 
+      "@type": "query", 
+      "description": "Search through available documents", 
+      "inputSchema": { 
+        "type": "object", 
+        "required": ["query"], 
+        "properties": { 
+          "query": { 
+            "type": "string", 
+            "description": "Search query" 
+          }, 
+          "limit": { 
+            "type": "integer", 
+            "default": 10, 
+            "minimum": 1, 
+            "maximum": 100 
+          } 
+        } 
+      } 
+    } 
+  ] 
+} 
+  
+
+gRPC Request: 
+
+// Client calls: 
+stub.GetTools(Empty{}) 
+  
+
+gRPC Response: 
+
+ToolsList { 
+  tools: [ 
+    { 
+      name: "redeem" 
+      type: "system" 
+      description: "Redeem a promise token..." 
+      input_schema: {/* Protobuf Struct representing the schema */} 
+    }, 
+    { 
+      name: "search_documents" 
+      type: "query" 
+      description: "Search through available documents" 
+      input_schema: {/* Protobuf Struct representing the schema */} 
+    } 
+  ] 
+} 
+  
+
+A.2 Simple Tool Call 
+
+HTTP Request: 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "call-001", 
+  "method": "tools/call", 
+  "params": { 
+    "name": "search_documents", 
+    "arguments": { 
+      "query": "MCP specification", 
+      "limit": 5 
+    } 
+  } 
+} 
+  
+
+HTTP Response: 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "call-001", 
+  "result": { 
+    "content": [ 
+      { 
+        "document_id": "doc_123", 
+        "title": "MCP Protocol Overview", 
+        "excerpt": "The Model Context Protocol enables..." 
+      } 
+    ], 
+    "_meta": { 
+      "response_type": "answer", 
+      "timestamp": "2024-01-01T12:00:00Z", 
+      "processing_time_ms": 145 
+    } 
+  } 
+} 
+  
+
+gRPC Request: 
+
+ToolRequest { 
+  name: "search_documents" 
+  arguments: { 
+    fields: { 
+      "query": { string_value: "MCP specification" } 
+      "limit": { number_value: 5 } 
+    } 
+  } 
+} 
+  
+
+gRPC Response: 
+
+ToolResponse { 
+  result: { 
+    fields: { 
+      "content": { /* Array of results */ } 
+    } 
+  } 
+  meta: { 
+    response_type: ANSWER 
+    timestamp: 1704110400000 
+    processing_time_ms: 145 
+  } 
+} 
+  
+
+A.3 Promise Flow 
+
+HTTP Initial Request: 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "analysis-001", 
+  "method": "tools/call", 
+  "params": { 
+    "name": "analyze_dataset", 
+    "arguments": { 
+      "dataset_id": "large_dataset_001", 
+      "analysis_type": "comprehensive" 
+    } 
+  } 
+} 
+  
+
+HTTP Promise Response: 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "analysis-001", 
+  "result": { 
+    "_meta": { 
+      "response_type": "promise", 
+      "promise_token": "prom_a7b9c2d4e6f8", 
+      "estimated_completion": "2024-01-01T12:05:00Z" 
+    } 
+  } 
+} 
+  
+
+gRPC Initial Request: 
+
+ToolRequest { 
+  name: "analyze_dataset" 
+  arguments: { 
+    fields: { 
+      "dataset_id": { string_value: "large_dataset_001" } 
+      "analysis_type": { string_value: "comprehensive" } 
+    } 
+  } 
+} 
+  
+
+gRPC Promise Response: 
+
+ToolResponse { 
+  result: {} 
+  meta: { 
+    response_type: PROMISE 
+    promise_token: "prom_a7b9c2d4e6f8" 
+  } 
+} 
+  
+
+HTTP Redeem Request: 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "redeem-001", 
+  "method": "tools/call", 
+  "params": { 
+    "name": "redeem", 
+    "arguments": { 
+      "promise": "prom_a7b9c2d4e6f8" 
+    } 
+  } 
+} 
+  
+
+gRPC Redeem Request: 
+
+ToolRequest { 
+  name: "redeem" 
+  arguments: { 
+    fields: { 
+      "promise": { string_value: "prom_a7b9c2d4e6f8" } 
+    } 
+  } 
+} 
+  
+
+A.4 Streaming 
+
+HTTP with SSE: 
+
+POST /rpc HTTP/1.1 
+Accept: text/event-stream 
+Content-Type: application/json 
+ 
+{ 
+  "jsonrpc": "2.0", 
+  "id": "stream-001", 
+  "method": "tools/call", 
+  "params": { 
+    "name": "generate_report", 
+    "arguments": {"topic": "quarterly results"} 
+  } 
+} 
+  
+
+HTTP SSE Response: 
+
+event: message 
+data: {"partial": "Quarterly Report\n\nExecutive Summary"} 
+ 
+event: message 
+data: {"partial": "\n\nRevenue for Q4 increased by 15%..."} 
+ 
+event: done 
+data: {"_meta": {"response_type": "answer", "timestamp": "2024-01-01T12:00:00Z"}} 
+  
+
+gRPC Streaming Request: 
+
+// Client calls: 
+stream = stub.CallToolStream(ToolRequest { 
+  name: "generate_report" 
+  arguments: { 
+    fields: { 
+      "topic": { string_value: "quarterly results" } 
+    } 
+  } 
+}) 
+  
+
+gRPC Stream Response: 
+
+// Multiple messages in stream: 
+ToolResponse { 
+  result: { 
+    fields: { 
+      "partial": { string_value: "Quarterly Report\n\nExecutive Summary" } 
+    } 
+  } 
+} 
+ 
+ToolResponse { 
+  result: { 
+    fields: { 
+      "partial": { string_value: "\n\nRevenue for Q4 increased by 15%..." } 
+    } 
+  } 
+} 
+ 
+// Final message: 
+ToolResponse { 
+  result: { /* complete result */ } 
+  meta: { 
+    response_type: ANSWER 
+    timestamp: 1704110400000 
+  } 
+} 
+  
+
+A.5 Error Handling 
+
+HTTP Error Response: 
+
+{ 
+  "jsonrpc": "2.0", 
+  "id": "error-example", 
+  "error": { 
+    "code": -32601, 
+    "message": "Tool not found", 
+    "data": { 
+      "requested_tool": "nonexistent_tool", 
+      "available_tools": ["redeem", "search_documents", "analyze_dataset"], 
+      "suggestion": "Did you mean 'search_documents'?" 
+    } 
+  } 
+} 
+  
+
+gRPC Error: 
+
+// gRPC returns status code with details: 
+Status { 
+  code: NOT_FOUND 
+  message: "Tool not found: nonexistent_tool" 
+  details: { 
+    // ErrorInfo with structured details 
+  } 
+} 
+ 
