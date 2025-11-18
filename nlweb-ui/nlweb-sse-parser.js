@@ -125,42 +125,61 @@ export class NLWebSSEParser {
         if (resourceData.image) {
             let imageUrl = null;
 
-            // Debug logging
-            console.log('Image data type:', typeof resourceData.image);
-            console.log('Image data:', resourceData.image);
-
             // Handle different image data formats
             if (typeof resourceData.image === 'string') {
                 // Simple string URL
                 imageUrl = resourceData.image;
             } else if (Array.isArray(resourceData.image) && resourceData.image.length > 0) {
-                // Array of URLs or objects - take first one
-                const firstImage = resourceData.image[0];
-                if (typeof firstImage === 'string') {
-                    imageUrl = firstImage;
-                } else if (firstImage && typeof firstImage === 'object') {
-                    // Could be an ImageObject with url property
-                    imageUrl = firstImage.url || firstImage.contentUrl || firstImage.src || firstImage['@id'];
+                // Array of image objects - look for a valid image URL
+                for (const img of resourceData.image) {
+                    if (typeof img === 'string') {
+                        imageUrl = img;
+                        break;
+                    } else if (img && typeof img === 'object') {
+                        // Try to find actual image URL, not just an anchor reference
+                        const potentialUrl = img.url || img.contentUrl || img.src;
+                        if (potentialUrl && !potentialUrl.startsWith('#')) {
+                            imageUrl = potentialUrl;
+                            break;
+                        }
+                        // Only use @id if it's not just an anchor
+                        if (img['@id'] && !img['@id'].startsWith('#') && img['@id'].includes('#')) {
+                            // This might be a URL with an anchor, but not useful as an image src
+                            continue;
+                        }
+                    }
                 }
             } else if (typeof resourceData.image === 'object') {
-                // ImageObject with url property - check for @id as well
-                imageUrl = resourceData.image.url || resourceData.image.contentUrl ||
-                          resourceData.image.src || resourceData.image['@id'];
+                // Single ImageObject
+                // Try actual image properties first
+                imageUrl = resourceData.image.url || resourceData.image.contentUrl || resourceData.image.src;
+
+                // Only use @id if other properties don't exist and it's not just an anchor
+                if (!imageUrl && resourceData.image['@id']) {
+                    const id = resourceData.image['@id'];
+                    // Skip if it's a page anchor reference (contains #primaryimage or similar)
+                    if (!id.includes('#primaryimage') && !id.startsWith('#')) {
+                        imageUrl = id;
+                    }
+                }
             }
 
-            console.log('Extracted imageUrl:', imageUrl);
-
-            // Only create img element if we have a valid URL
-            if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+            // Only create img element if we have a valid image URL
+            // Must start with http(s) and not be an anchor reference
+            if (imageUrl && typeof imageUrl === 'string' &&
+                (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) &&
+                !imageUrl.endsWith('#primaryimage')) {
                 const imgWrapper = document.createElement('div');
                 const img = document.createElement('img');
                 img.src = imageUrl;
                 img.alt = 'Item image';
                 img.className = 'item-image';
+                img.onerror = function() {
+                    // Hide broken images
+                    this.style.display = 'none';
+                };
                 imgWrapper.appendChild(img);
                 container.appendChild(imgWrapper);
-            } else if (imageUrl) {
-                console.warn('Invalid image URL format:', imageUrl);
             }
         }
 
