@@ -125,6 +125,10 @@ export class NLWebSSEParser {
         if (resourceData.image) {
             let imageUrl = null;
 
+            // Debug logging
+            console.log('Image data type:', typeof resourceData.image);
+            console.log('Image data:', resourceData.image);
+
             // Handle different image data formats
             if (typeof resourceData.image === 'string') {
                 // Simple string URL
@@ -136,15 +140,18 @@ export class NLWebSSEParser {
                     imageUrl = firstImage;
                 } else if (firstImage && typeof firstImage === 'object') {
                     // Could be an ImageObject with url property
-                    imageUrl = firstImage.url || firstImage.contentUrl || firstImage.src;
+                    imageUrl = firstImage.url || firstImage.contentUrl || firstImage.src || firstImage['@id'];
                 }
             } else if (typeof resourceData.image === 'object') {
-                // ImageObject with url property
-                imageUrl = resourceData.image.url || resourceData.image.contentUrl || resourceData.image.src;
+                // ImageObject with url property - check for @id as well
+                imageUrl = resourceData.image.url || resourceData.image.contentUrl ||
+                          resourceData.image.src || resourceData.image['@id'];
             }
 
+            console.log('Extracted imageUrl:', imageUrl);
+
             // Only create img element if we have a valid URL
-            if (imageUrl && typeof imageUrl === 'string') {
+            if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
                 const imgWrapper = document.createElement('div');
                 const img = document.createElement('img');
                 img.src = imageUrl;
@@ -152,6 +159,8 @@ export class NLWebSSEParser {
                 img.className = 'item-image';
                 imgWrapper.appendChild(img);
                 container.appendChild(imgWrapper);
+            } else if (imageUrl) {
+                console.warn('Invalid image URL format:', imageUrl);
             }
         }
 
