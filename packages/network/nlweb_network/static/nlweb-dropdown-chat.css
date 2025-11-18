@@ -64,7 +64,7 @@
     min-height: 300px;
     display: none;
     z-index: 1000;
-    overflow: visible;
+    overflow: hidden;
     flex-direction: column;
 }
 
