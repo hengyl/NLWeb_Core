@@ -238,7 +238,7 @@ The user's question is: {request.query}. The item's description is {item.descrip
 
                     # Check if we can still send more results
                     if self.num_results_sent < max_results:
-                        await self.handler.send_answer(result)
+                        await self.handler.send_results([result])
                         result["sent"] = True
                         self.num_results_sent += 1
 
@@ -280,11 +280,11 @@ The user's question is: {request.query}. The item's description is {item.descrip
 
         if to_send:
             try:
-                # Send each result using send_answer
+                # Send each result using send_results
                 for i, result in enumerate(to_send):
                     # Create a copy without the 'sent' field for sending (keep score)
                     result_to_send = {k: v for k, v in result.items() if k != "sent"}
-                    await self.handler.send_answer(result_to_send)
+                    await self.handler.send_results([result_to_send])
                     result["sent"] = True
                     self.num_results_sent += 1
             except (BrokenPipeError, ConnectionResetError) as e:

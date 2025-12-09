@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nlweb-models"
-version = "0.5.5"
+version = "0.5.6"
 description = "Model bundle for NLWeb - includes embedding and LLM interfaces for multiple providers"
 readme = "README.md"
 requires-python = ">=3.9"

@@ -38,9 +38,10 @@ class VectorDBRetriever:
             List of tuples (url, json_str, name, site)
         """
         # Get search parameters from handler
-        query = self.handler.query
-        site = self.handler.get_param('site', str, 'all')
-        num_results = self.handler.get_param('num_results', int, 50)
+        # Use decontextualized query text if available, otherwise use original
+        query_text = self.handler.query.decontextualized_text or self.handler.query.text
+        site = getattr(self.handler.query, 'site', None) or 'all'
+        num_results = getattr(self.handler.query, 'num_results', None) or 50
 
         # Determine endpoint configuration
         # Option (a): Check if query_params specifies vectordb configuration
@@ -62,7 +63,7 @@ class VectorDBRetriever:
         )
 
         # Perform the search
-        results = await client.search(query, site, num_results)
+        results = await client.search(query_text, site, num_results)
 
         return results
 

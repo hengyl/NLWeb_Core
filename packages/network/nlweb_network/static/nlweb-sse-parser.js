@@ -18,7 +18,47 @@ export class NLWebSSEParser {
             };
         }
 
-        // Handle content array (NLWeb format)
+        // Handle v0.54 results array (Answer response)
+        if (data.results && Array.isArray(data.results)) {
+            const items = data.results.map(result => ({
+                type: 'resource',
+                data: result
+            }));
+
+            return {
+                type: 'content',
+                items: items
+            };
+        }
+
+        // Handle v0.54 elicitation response
+        if (data.elicitation) {
+            return {
+                type: 'elicitation',
+                text: data.elicitation.text,
+                questions: data.elicitation.questions || []
+            };
+        }
+
+        // Handle v0.54 promise response
+        if (data.promise) {
+            return {
+                type: 'promise',
+                promise_token: data.promise.promise_token,
+                estimated_time: data.promise.estimated_time
+            };
+        }
+
+        // Handle v0.54 failure response
+        if (data.error) {
+            return {
+                type: 'error',
+                code: data.error.code,
+                message: data.error.message
+            };
+        }
+
+        // Handle legacy content array (NLWeb format)
         if (data.content && Array.isArray(data.content)) {
             const items = [];
 
@@ -32,6 +72,19 @@ export class NLWebSSEParser {
                     });
                 }
             });
+
+            return {
+                type: 'content',
+                items: items
+            };
+        }
+
+        // Handle v0.54 structuredData (chatgpt_app format)
+        if (data.structuredData && Array.isArray(data.structuredData)) {
+            const items = data.structuredData.map(result => ({
+                type: 'resource',
+                data: result
+            }));
 
             return {
                 type: 'content',

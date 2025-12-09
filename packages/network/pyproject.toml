@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nlweb-network"
-version = "0.5.5"
+version = "0.5.6"
 description = "Network interfaces and server for NLWeb - HTTP, MCP, and A2A protocol adapters"
 readme = "README.md"
 license = {text = "MIT"}

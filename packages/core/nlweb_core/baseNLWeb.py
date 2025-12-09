@@ -13,21 +13,41 @@ from abc import ABC, abstractmethod
 import asyncio
 from nlweb_core.query_analysis.query_analysis import DefaultQueryAnalysisHandler, QueryAnalysisHandler, query_analysis_tree
 from nlweb_core.utils import get_param as _get_param
+from nlweb_core.protocol.models import Query, Context, Prefer, Meta
 
 class NLWebHandler(ABC):
 
     def __init__(self, query_params, output_method):
 
         self.output_method = output_method
-        self.query_params = query_params
-        self.query = self.get_param("query", str, "")
-        self.query_params["raw_query"] = self.query
+
+        # Parse v0.54 request structure into protocol objects
+        # Query object (required)
+        query_dict = query_params.get('query', {})
+        if not isinstance(query_dict, dict) or 'text' not in query_dict:
+            raise ValueError("Invalid request: 'query' must be an object with 'text' field")
+        self.query = Query(**query_dict)
+
+        # Context object (optional)
+        context_dict = query_params.get('context', {})
+        self.context = Context(**context_dict) if context_dict else Context()
+
+        # Prefer object (optional)
+        prefer_dict = query_params.get('prefer', {})
+        self.prefer = Prefer(**prefer_dict) if prefer_dict else Prefer()
+
+        # Meta object (optional)
+        meta_dict = query_params.get('meta', {})
+        self.meta = Meta(**meta_dict) if meta_dict else Meta()
+
         self.return_value = None
-        self._meta = {}
+        self._meta = {
+            'version': '0.54',
+            'response_type': 'Answer'
+        }
     
     async def runQuery(self):
         # Send metadata first
-        self.set_meta_attribute("version", "0.5")
         await self.send_meta()
 
         await self.prepare()
@@ -36,8 +56,6 @@ class NLWebHandler(ABC):
 
     async def prepare(self):
         await self.decontextualizeQuery()
-        # Update self.query after decontextualization
-        self.query = self.query_params.get("query", self.query)
         query_analysis_handler = QueryAnalysisHandler(self)
         await query_analysis_handler.do()
 
@@ -46,36 +64,45 @@ class NLWebHandler(ABC):
         pass
 
     async def decontextualizeQuery(self):
-        prev_queries = self.get_param("prev", list, [])
-        context = self.get_param("context", str, None)
+        """
+        Decontextualize the query using conversation context.
+        Sets self.query.decontextualized_text with the processed query.
+        """
+        # Get context information from protocol objects
+        prev_queries = self.context.prev or []
+        context_text = self.context.text
+        site = getattr(self.query, 'site', 'all') or 'all'
 
-        # Populate variables needed by decontextualization prompts
-        self.query_params["request.rawQuery"] = self.query
-        self.query_params["request.site"] = self.get_param("site", str, "all")
-        
-        if (len(prev_queries) == 0 and context is None):
-            self.query_params["decontextualized_query"] = self.query
-        elif (len(prev_queries) > 0 and context is None):
-            # Join previous queries for the prompt
+        # Build temporary params dict for query analysis handlers
+        # (query analysis code still uses query_params dict structure)
+        self.query_params = {
+            "request.rawQuery": self.query.text,
+            "request.site": site
+        }
+
+        if len(prev_queries) == 0 and context_text is None:
+            # No context - use original query
+            self.query.decontextualized_text = self.query.text
+        elif len(prev_queries) > 0 and context_text is None:
+            # Decontextualize using previous queries
             self.query_params["request.previousQueries"] = ", ".join(prev_queries)
-            
+
             result = await DefaultQueryAnalysisHandler(self, prompt_ref="PrevQueryDecontextualizer", root_node=query_analysis_tree).do()
-            
+
             if result and "decontextualized_query" in result:
-                self.query_params["decontextualized_query"] = result["decontextualized_query"]
+                self.query.decontextualized_text = result["decontextualized_query"]
             else:
-                self.query_params["decontextualized_query"] = self.query
-            self.query_params["query"] = self.query_params["decontextualized_query"]
+                self.query.decontextualized_text = self.query.text
         else:
+            # Decontextualize using both prev queries and context text
             self.query_params["request.previousQueries"] = ", ".join(prev_queries) if prev_queries else ""
-            self.query_params["request.context"] = context
-            
+            self.query_params["request.context"] = context_text
+
             result = await DefaultQueryAnalysisHandler(self, prompt_ref="FullContextDecontextualizer", root_node=query_analysis_tree).do()
             if result and "decontextualized_query" in result:
-                self.query_params["decontextualized_query"] = result["decontextualized_query"]
+                self.query.decontextualized_text = result["decontextualized_query"]
             else:
-                self.query_params["decontextualized_query"] = self.query
-            self.query_params["query"] = self.query_params["decontextualized_query"]
+                self.query.decontextualized_text = self.query.text
     
     def set_meta_attribute(self, key, value):
         """Set a metadata attribute in the _meta object."""
@@ -107,37 +134,67 @@ class NLWebHandler(ABC):
 
         return " ".join(text_parts)
 
-    async def send_answer(self, data):
+    async def send_results(self, results: list):
         """
-        Send an answer by constructing a content object.
+        Send v0.54 compliant results array.
 
         Args:
-            data: A dict or list of dicts representing the resource data
+            results: List of result objects (dicts with @type, name, etc.)
         """
-        # Extract text from the data
-        text = self._extract_text_from_dict(data)
+        if self.output_method:
+            await self.output_method({"results": results})
 
-        # Construct the content array
-        content = []
+    async def send_elicitation(self, text: str, questions: list):
+        """
+        Send an elicitation response.
 
-        # Add text item if we extracted any text
-        if text:
-            content.append({
-                "type": "text",
-                "text": text
+        Args:
+            text: Introductory text for the elicitation
+            questions: List of question dicts with id, text, type, options
+        """
+        self._meta['response_type'] = 'Elicitation'
+        await self.send_meta()
+        if self.output_method:
+            await self.output_method({
+                "elicitation": {
+                    "text": text,
+                    "questions": questions
+                }
             })
 
-        # Add resource item
-        content.append({
-            "type": "resource",
-            "resource": {
-                "data": data
-            }
-        })
+    async def send_promise(self, token: str, estimated_time: int = None):
+        """
+        Send a promise response.
 
-        # Send via output method
+        Args:
+            token: Promise token for checking status
+            estimated_time: Estimated time to completion in seconds (optional)
+        """
+        self._meta['response_type'] = 'Promise'
+        await self.send_meta()
         if self.output_method:
-            await self.output_method({"content": content})
+            promise = {"token": token}
+            if estimated_time is not None:
+                promise["estimated_time"] = estimated_time
+            await self.output_method({"promise": promise})
+
+    async def send_failure(self, code: str, message: str):
+        """
+        Send a failure response.
+
+        Args:
+            code: Error code (e.g., NO_RESULTS, INTERNAL_ERROR)
+            message: Error message
+        """
+        self._meta['response_type'] = 'Failure'
+        await self.send_meta()
+        if self.output_method:
+            await self.output_method({
+                "error": {
+                    "code": code,
+                    "message": message
+                }
+            })
 
     def get_param(self, param_name, param_type=str, default_value=None):
         """Get a parameter from query_params with type conversion."""

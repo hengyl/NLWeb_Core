@@ -26,15 +26,16 @@ class HTTPJSONInterface(BaseInterface):
     async def parse_request(self, request: web.Request) -> Dict[str, Any]:
         """
         Parse HTTP request and extract query parameters.
+        Validates v0.54 format.
 
         Args:
             request: aiohttp Request object
 
         Returns:
-            Dict of query parameters
+            Dict of query parameters in v0.54 format
 
         Raises:
-            ValueError: If 'query' parameter is missing
+            ValueError: If request is not v0.54 compliant
         """
         # Get query parameters from URL
         query_params = dict(request.query)
@@ -49,9 +50,12 @@ class HTTPJSONInterface(BaseInterface):
                 # If body parsing fails, just use query params
                 pass
 
-        # Validate required parameters
-        if 'query' not in query_params:
-            raise ValueError("Missing required parameter: query")
+        # Validate v0.54 structure
+        if 'query' not in query_params or not isinstance(query_params['query'], dict):
+            raise ValueError("Invalid request: missing 'query' object. Expected v0.54 format with nested structure.")
+
+        if 'text' not in query_params['query']:
+            raise ValueError("Invalid request: missing 'query.text' field")
 
         return query_params
 
@@ -79,35 +83,60 @@ class HTTPJSONInterface(BaseInterface):
     def build_json_response(self, responses: list) -> Dict[str, Any]:
         """
         Build final JSON response from collected outputs.
+        Constructs v0.54 compliant response.
 
         Args:
             responses: List of response dicts from handler
 
         Returns:
-            Complete JSON response dict
+            Complete JSON response dict in v0.54 format
         """
-        # Separate _meta and content items
-        meta = {}
-        content = []
+        # Collect _meta and content
+        meta = None
+        results = []
+        elicitation = None
+        promise = None
+        error = None
 
         for response in responses:
             if '_meta' in response:
-                # Merge meta information (first one wins for duplicates)
-                for key, value in response['_meta'].items():
-                    if key not in meta:
-                        meta[key] = value
-            if 'content' in response:
-                # Collect all content items
-                content.extend(response['content'])
+                meta = response['_meta']
+            if 'results' in response:
+                results.extend(response['results'])
+            if 'elicitation' in response:
+                elicitation = response['elicitation']
+            if 'promise' in response:
+                promise = response['promise']
+            if 'error' in response:
+                error = response['error']
 
-        # Build final response
-        result = {}
-        if meta:
-            result['_meta'] = meta
-        if content:
-            result['content'] = content
+        # Ensure required meta fields
+        if not meta:
+            meta = {'response_type': 'Answer', 'version': '0.54'}
+        if 'response_type' not in meta:
+            meta['response_type'] = 'Answer'
+        if 'version' not in meta:
+            meta['version'] = '0.54'
 
-        return result
+        # Build response based on response_type
+        response_type = meta['response_type']
+
+        if response_type == 'Answer':
+            return {'_meta': meta, 'results': results}
+        elif response_type == 'Elicitation':
+            if not elicitation:
+                raise ValueError("Elicitation response missing elicitation object")
+            return {'_meta': meta, 'elicitation': elicitation}
+        elif response_type == 'Promise':
+            if not promise:
+                raise ValueError("Promise response missing promise object")
+            return {'_meta': meta, 'promise': promise}
+        elif response_type == 'Failure':
+            if not error:
+                raise ValueError("Failure response missing error object")
+            return {'_meta': meta, 'error': error}
+        else:
+            raise ValueError(f"Unknown response_type: {response_type}")
 
     async def handle_request(self, request: web.Request, handler_class) -> web.Response:
         """
@@ -139,11 +168,17 @@ class HTTPJSONInterface(BaseInterface):
 
         except ValueError as e:
             return web.json_response(
-                {"error": str(e), "_meta": {}},
+                {
+                    "_meta": {"response_type": "Failure", "version": "0.54"},
+                    "error": {"code": "INVALID_REQUEST", "message": str(e)}
+                },
                 status=400
             )
         except Exception as e:
             return web.json_response(
-                {"error": str(e), "_meta": {}},
+                {
+                    "_meta": {"response_type": "Failure", "version": "0.54"},
+                    "error": {"code": "INTERNAL_ERROR", "message": str(e)}
+                },
                 status=500
             )

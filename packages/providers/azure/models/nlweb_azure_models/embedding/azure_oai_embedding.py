@@ -137,7 +137,7 @@ async def get_azure_embedding(
 
     if (len(text) > 20000):
         text = text[:20000]
-    
+
     try:
         response = await client.embeddings.create(
             input=text,

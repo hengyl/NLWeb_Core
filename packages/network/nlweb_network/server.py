@@ -41,18 +41,19 @@ async def ask_handler(request):
     Handle /ask requests (both GET and POST).
 
     Routes to either HTTP SSE (streaming=true, default) or
-    HTTP JSON (streaming=false) interface based on parameters.
+    HTTP JSON (streaming=false) interface based on prefer.streaming parameter.
 
-    Expected parameters:
-    - query: The natural language query (required)
-    - site: Site to search (optional, defaults to "all")
-    - num_results: Number of results to return (optional, defaults to 50)
-    - db: Database endpoint to use (optional)
-    - streaming: Whether to use SSE streaming (optional, defaults to true)
+    Expected v0.54 format:
+    {
+        "query": {"text": "...", ...},
+        "context": {...},
+        "prefer": {"streaming": true/false, ...},
+        "meta": {...}
+    }
 
     Returns:
-    - If streaming=false: JSON response with the complete NLWeb answer
-    - Otherwise: Server-Sent Events stream
+    - If prefer.streaming=false: JSON response with the complete NLWeb answer
+    - Otherwise (default): Server-Sent Events stream
     """
     # Get query parameters to check streaming preference
     query_params = dict(request.query)
@@ -65,8 +66,9 @@ async def ask_handler(request):
         except Exception:
             pass
 
-    # Check streaming parameter (default: true)
-    streaming = get_param(query_params, "streaming", bool, True)
+    # Extract streaming from prefer section (default: true)
+    prefer = query_params.get('prefer', {})
+    streaming = prefer.get('streaming', True) if isinstance(prefer, dict) else True
 
     # Route to appropriate interface
     if streaming:
@@ -133,6 +135,50 @@ async def a2a_sse_handler(request):
     return await interface.handle_request(request, NLWebVectorDBRankingHandler)
 
 
+async def await_handler(request):
+    """
+    Handle /await requests for promise checking.
+
+    Expected POST body (v0.54 format):
+    {
+        "promise_token": "promise_xyz789",
+        "action": "checkin",  // or "cancel"
+        "meta": {...}
+    }
+
+    Returns:
+    - JSON response with promise status or final answer
+    """
+    try:
+        body = await request.json()
+
+        # Validate required fields
+        if 'promise_token' not in body:
+            return web.json_response({
+                '_meta': {'response_type': 'Failure', 'version': '0.54'},
+                'error': {'code': 'MISSING_FIELD', 'message': 'Missing required field: promise_token'}
+            }, status=400)
+
+        if 'action' not in body or body['action'] not in ['checkin', 'cancel']:
+            return web.json_response({
+                '_meta': {'response_type': 'Failure', 'version': '0.54'},
+                'error': {'code': 'INVALID_ACTION', 'message': 'Action must be "checkin" or "cancel"'}
+            }, status=400)
+
+        # TODO: Implement promise tracking/checking logic
+        # For now, return a placeholder Promise response
+        return web.json_response({
+            '_meta': {'response_type': 'Promise', 'version': '0.54'},
+            'promise': {'token': body['promise_token'], 'estimated_time': 60}
+        })
+
+    except Exception as e:
+        return web.json_response({
+            '_meta': {'response_type': 'Failure', 'version': '0.54'},
+            'error': {'code': 'INTERNAL_ERROR', 'message': str(e)}
+        }, status=500)
+
+
 def create_app():
     """Create and configure the aiohttp application."""
     app = web.Application()
@@ -140,6 +186,7 @@ def create_app():
     # Add HTTP routes
     app.router.add_get('/ask', ask_handler)
     app.router.add_post('/ask', ask_handler)
+    app.router.add_post('/await', await_handler)
     app.router.add_get('/health', health_handler)
 
     # Add MCP routes

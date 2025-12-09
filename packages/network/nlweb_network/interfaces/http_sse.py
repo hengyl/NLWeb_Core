@@ -28,15 +28,16 @@ class HTTPSSEInterface(BaseInterface):
     async def parse_request(self, request: web.Request) -> Dict[str, Any]:
         """
         Parse HTTP request and extract query parameters.
+        Validates v0.54 format.
 
         Args:
             request: aiohttp Request object
 
         Returns:
-            Dict of query parameters
+            Dict of query parameters in v0.54 format
 
         Raises:
-            ValueError: If 'query' parameter is missing
+            ValueError: If request is not v0.54 compliant
         """
         # Get query parameters from URL
         query_params = dict(request.query)
@@ -51,9 +52,12 @@ class HTTPSSEInterface(BaseInterface):
                 # If body parsing fails, just use query params
                 pass
 
-        # Validate required parameters
-        if 'query' not in query_params:
-            raise ValueError("Missing required parameter: query")
+        # Validate v0.54 structure
+        if 'query' not in query_params or not isinstance(query_params['query'], dict):
+            raise ValueError("Invalid request: missing 'query' object. Expected v0.54 format with nested structure.")
+
+        if 'text' not in query_params['query']:
+            raise ValueError("Invalid request: missing 'query.text' field")
 
         return query_params
 
@@ -126,7 +130,7 @@ class HTTPSSEInterface(BaseInterface):
             print(f"[ERROR] ValueError: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc(file=sys.stderr)
-            # For errors, return a single SSE event with error
+            # For errors, return v0.54 Failure response via SSE
             response = web.StreamResponse(
                 status=200,  # SSE uses 200 even for errors
                 reason='OK',
@@ -137,14 +141,13 @@ class HTTPSSEInterface(BaseInterface):
             )
             await response.prepare(request)
 
-            error_data = {
-                "_meta": {
-                    "nlweb/streaming_status": "error",
-                    "error": str(e)
-                }
-            }
-            event_data = f"data: {json.dumps(error_data)}\n\n"
-            await response.write(event_data.encode('utf-8'))
+            # Send _meta
+            meta_data = {"_meta": {"response_type": "Failure", "version": "0.54"}}
+            await response.write(f"data: {json.dumps(meta_data)}\n\n".encode('utf-8'))
+
+            # Send error
+            error_data = {"error": {"code": "INVALID_REQUEST", "message": str(e)}}
+            await response.write(f"data: {json.dumps(error_data)}\n\n".encode('utf-8'))
             await response.write_eof()
 
             return response
@@ -153,7 +156,7 @@ class HTTPSSEInterface(BaseInterface):
             print(f"[ERROR] Unexpected exception: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc(file=sys.stderr)
-            # For unexpected errors
+            # For unexpected errors, return v0.54 Failure response via SSE
             response = web.StreamResponse(
                 status=200,
                 reason='OK',
@@ -164,14 +167,13 @@ class HTTPSSEInterface(BaseInterface):
             )
             await response.prepare(request)
 
-            error_data = {
-                "_meta": {
-                    "nlweb/streaming_status": "error",
-                    "error": str(e)
-                }
-            }
-            event_data = f"data: {json.dumps(error_data)}\n\n"
-            await response.write(event_data.encode('utf-8'))
+            # Send _meta
+            meta_data = {"_meta": {"response_type": "Failure", "version": "0.54"}}
+            await response.write(f"data: {json.dumps(meta_data)}\n\n".encode('utf-8'))
+
+            # Send error
+            error_data = {"error": {"code": "INTERNAL_ERROR", "message": str(e)}}
+            await response.write(f"data: {json.dumps(error_data)}\n\n".encode('utf-8'))
             await response.write_eof()
 
             return response

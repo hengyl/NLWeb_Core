@@ -14,6 +14,7 @@ class NLWebChat {
         this.currentStream = null;
         this.conversations = {};
         this.currentConversation = null;
+        this.conversationHistory = []; // Track previous queries for v0.54 context
         this.init();
     }
 
@@ -187,6 +188,9 @@ class NLWebChat {
             updatedAt: Date.now()
         };
 
+        // Reset conversation history for v0.54 context
+        this.conversationHistory = [];
+
         // Update UI
         this.updateUI();
         this.elements.centeredInput.focus();
@@ -297,113 +301,218 @@ class NLWebChat {
         };
         this.currentConversation.messages.push(assistantMessage);
 
+        // Add to conversation history for v0.54 context
+        this.conversationHistory.push(query);
+
         // Render with loading indicator
         this.renderMessages();
 
         try {
-            // Build URL
-            const url = new URL(`${this.baseUrl}/ask`);
-            url.searchParams.set('query', query);
-            url.searchParams.set('site', site);
-            url.searchParams.set('max_results', this.maxResults);
-            url.searchParams.set('mode', 'list');
-
-            console.log('=== NLWeb Request ===');
-            console.log('URL:', url.toString());
-            console.log('Query:', query);
-            console.log('Site:', site);
-            console.log('Max Results:', this.maxResults);
-            console.log('Mode: list');
-            console.log('====================');
-
-            // Create EventSource for SSE
-            this.currentStream = new EventSource(url.toString());
-
-            this.currentStream.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log('Received SSE event:', data);
-
-                    // Handle _meta message
-                    if (data._meta) {
-                        console.log('Metadata:', data._meta);
-                        return;
-                    }
-
-                    // Handle content array (NLWeb format)
-                    if (data.content && Array.isArray(data.content)) {
-                        console.log('Processing content array:', data.content);
-                        data.content.forEach((item, idx) => {
-                            console.log(`Content item ${idx}:`, item);
-                            
-                            // Only add resource items (skip text items)
-                            if (item.type === 'resource' && item.resource && item.resource.data) {
-                                assistantMessage.content.push(item.resource.data);
-                            }
-                        });
-                        // Sort by score (descending) before rendering
-                        this.sortResultsByScore(assistantMessage.content);
-                        this.renderMessages();
-                        return;
-                    }
-
-                    // Handle text content
-                    if (data.type === 'text' || data.text) {
-                        assistantMessage.content.push({
-                            type: 'text',
-                            content: data.content || data.text
-                        });
-                        this.renderMessages();
-                    } 
-                    // Handle item/result
-                    else if (data.type === 'item' || data.type === 'result' || data.title) {
-                        assistantMessage.content.push({
-                            type: 'item',
-                            title: data.title,
-                            snippet: data.snippet || data.description,
-                            link: data.link || data.url
-                        });
-                        this.renderMessages();
-                    } 
-                    // Handle done/complete
-                    else if (data.type === 'done' || data.type === 'complete') {
-                        console.log('Stream complete');
-                        this.currentStream.close();
-                        this.currentStream = null;
-                        this.saveConversations();
-                    }
-                } catch (err) {
-                    console.error('Error parsing SSE data:', err, 'Raw data:', event.data);
+            // Build v0.54 request
+            const v054Request = {
+                query: {
+                    text: query,
+                    site: site,
+                    num_results: this.maxResults
+                },
+                prefer: {
+                    streaming: true,
+                    response_format: 'conv_search',
+                    mode: 'list'
+                },
+                meta: {
+                    api_version: '0.54'
                 }
             };
 
-            this.currentStream.onerror = (error) => {
-                console.log('SSE connection closed or error:', error);
-                
-                if (this.currentStream) {
-                    this.currentStream.close();
-                    this.currentStream = null;
-                }
+            // Add conversation context if available
+            if (this.conversationHistory.length > 1) {
+                v054Request.context = {
+                    '@type': 'ConversationalContext',
+                    prev: this.conversationHistory.slice(-6, -1) // Last 5 queries (excluding current)
+                };
+            }
 
-                // Only show error if we have no content yet
-                if (assistantMessage.content.length === 0) {
-                    assistantMessage.content.push({
-                        name: 'Error',
-                        description: 'Sorry, there was an error processing your request.'
-                    });
-                    this.renderMessages();
-                }
-                
-                this.saveConversations();
-            };
+            // Send POST request to get streaming response
+            const response = await fetch(`${this.baseUrl}/ask`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify(v054Request)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            // Handle streaming response
+            await this.handleStreamingResponse(response, assistantMessage);
 
         } catch (error) {
             console.error('Error starting stream:', error);
             assistantMessage.content.push({
-                type: 'text',
-                content: 'Sorry, there was an error connecting to the server.'
+                name: 'Error',
+                description: `Sorry, there was an error connecting to the server: ${error.message}`
             });
             this.renderMessages();
+            this.saveConversations();
+        }
+    }
+
+    async handleStreamingResponse(response, assistantMessage) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (!line.trim() || !line.startsWith('data: ')) continue;
+
+                    try {
+                        const dataStr = line.slice(6); // Remove 'data: ' prefix
+                        const data = JSON.parse(dataStr);
+
+                        // Handle v0.54 response types
+                        if (data._meta) {
+
+                            // Check for failure response
+                            if (data._meta.response_type === 'Failure' && data.error) {
+                                assistantMessage.content = [{
+                                    name: 'Error',
+                                    description: `Error (${data.error.code}): ${data.error.message}`
+                                }];
+                                this.renderMessages();
+                                this.saveConversations();
+                                return;
+                            }
+                        }
+
+                        // Handle v0.54 results array (conv_search format)
+                        if (data.results && Array.isArray(data.results)) {
+                            // Add new results
+                            data.results.forEach((result) => {
+                                // Check if result already exists (by URL or name)
+                                const exists = assistantMessage.content.some(item =>
+                                    (item.url && item.url === result.url) ||
+                                    (item.name && item.name === result.name)
+                                );
+
+                                if (!exists) {
+                                    assistantMessage.content.push(result);
+                                }
+                            });
+
+                            // Sort by score
+                            this.sortResultsByScore(assistantMessage.content);
+                            this.renderMessages();
+                        }
+
+                        // Handle v0.54 structuredData array (chatgpt_app format)
+                        if (data.structuredData && Array.isArray(data.structuredData)) {
+                            // Add new results
+                            data.structuredData.forEach((result) => {
+                                // Check if result already exists (by URL or name)
+                                const exists = assistantMessage.content.some(item =>
+                                    (item.url && item.url === result.url) ||
+                                    (item.name && item.name === result.name)
+                                );
+
+                                if (!exists) {
+                                    assistantMessage.content.push(result);
+                                }
+                            });
+
+                            // Sort by score
+                            this.sortResultsByScore(assistantMessage.content);
+                            this.renderMessages();
+                        }
+
+                        // Handle legacy content array
+                        if (data.content && Array.isArray(data.content)) {
+                            // Extract resource items from content array
+                            data.content.forEach((item) => {
+                                if (item.type === 'resource' && item.resource && item.resource.data) {
+                                    const result = item.resource.data;
+
+                                    // Check if result already exists
+                                    const exists = assistantMessage.content.some(existing =>
+                                        (existing.url && existing.url === result.url) ||
+                                        (existing.name && existing.name === result.name)
+                                    );
+
+                                    if (!exists) {
+                                        assistantMessage.content.push(result);
+                                    }
+                                }
+                            });
+
+                            // Sort by score
+                            this.sortResultsByScore(assistantMessage.content);
+                            this.renderMessages();
+                        }
+
+                        // Handle elicitation
+                        if (data.elicitation) {
+                            let elicitationText = data.elicitation.text + '\n\n';
+                            data.elicitation.questions.forEach(q => {
+                                elicitationText += `**${q.text}**\n`;
+                                if (q.options) {
+                                    elicitationText += q.options.map(opt => `- ${opt}`).join('\n') + '\n';
+                                }
+                                elicitationText += '\n';
+                            });
+
+                            assistantMessage.content = [{
+                                name: 'Question',
+                                description: elicitationText
+                            }];
+                            this.renderMessages();
+                            this.saveConversations();
+                        }
+
+                        // Handle promise
+                        if (data.promise) {
+                            const estimatedTime = data.promise.estimated_time
+                                ? ` (estimated ${data.promise.estimated_time}s)`
+                                : '';
+                            assistantMessage.content = [{
+                                name: 'Task Started',
+                                description: `Task started${estimatedTime}. Token: ${data.promise.token}`
+                            }];
+                            this.renderMessages();
+                            this.saveConversations();
+                        }
+
+                    } catch (err) {
+                        console.error('Error parsing SSE line:', err, 'Line:', line);
+                    }
+                }
+            }
+
+            // Stream complete
+            console.log('Stream complete');
+            this.saveConversations();
+
+        } catch (error) {
+            console.error('Error reading stream:', error);
+            if (assistantMessage.content.length === 0) {
+                assistantMessage.content.push({
+                    name: 'Error',
+                    description: 'Sorry, there was an error processing your request.'
+                });
+                this.renderMessages();
+            }
+            this.saveConversations();
         }
     }
 
@@ -647,6 +756,11 @@ class NLWebChat {
     loadConversation(id) {
         this.currentConversation = this.conversations[id];
         if (this.currentConversation) {
+            // Rebuild conversation history from messages for v0.54 context
+            this.conversationHistory = this.currentConversation.messages
+                .filter(msg => msg.role === 'user')
+                .map(msg => msg.query);
+
             this.updateUI();
 
             // Close sidebar on mobile
