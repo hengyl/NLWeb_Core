@@ -26,6 +26,18 @@ class ModelConfig:
     low: str
 
 @dataclass
+class LLMModelConfig:
+    """Configuration for a single LLM model endpoint."""
+    llm_type: str
+    model: str
+    api_key: Optional[str] = None
+    endpoint: Optional[str] = None
+    api_version: Optional[str] = None
+    auth_method: Optional[str] = None
+    import_path: Optional[str] = None
+    class_name: Optional[str] = None
+
+@dataclass
 class LLMProviderConfig:
     llm_type: str
     api_key: Optional[str] = None
@@ -162,6 +174,9 @@ class AppConfig:
         # Initialize defaults in case no config is found
         self.llm_endpoints = {}
         self.preferred_llm_endpoint = None
+        self.high_llm_model = None
+        self.low_llm_model = None
+        self.scoring_llm_model = None
         self.embedding_providers = {}
         self.preferred_embedding_provider = None
         self.retrieval_endpoints = {}
@@ -203,8 +218,27 @@ class AppConfig:
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
 
-        # Load LLM config from unified file
-        if 'llm' in config:
+        # Load LLM config from unified file - support both old and new formats
+        # New format: high-llm-model, low-llm-model, scoring-llm-model
+        # Old format: llm.models.high, llm.models.low
+
+        if 'high-llm-model' in config or 'low-llm-model' in config or 'scoring-llm-model' in config:
+            # New format with separate model configurations
+            if 'high-llm-model' in config:
+                self.high_llm_model = self._parse_llm_model_config(config['high-llm-model'])
+
+            if 'low-llm-model' in config:
+                self.low_llm_model = self._parse_llm_model_config(config['low-llm-model'])
+
+            if 'scoring-llm-model' in config:
+                self.scoring_llm_model = self._parse_llm_model_config(config['scoring-llm-model'])
+
+            # Keep old llm_endpoints empty for new format
+            self.preferred_llm_endpoint = None
+            self.llm_endpoints = {}
+
+        elif 'llm' in config:
+            # Old format for backward compatibility
             llm_cfg = config['llm']
             provider_name = llm_cfg.get('provider', 'default')
 
@@ -301,6 +335,19 @@ class AppConfig:
             ssl=SSLConfig(enabled=False),
             logging=LoggingConfig(level="info", file="./logs/webserver.log"),
             static=StaticConfig(enable_cache=True, cache_max_age=3600, gzip_enabled=True)
+        )
+
+    def _parse_llm_model_config(self, cfg: dict) -> LLMModelConfig:
+        """Helper method to parse LLM model configuration from dict."""
+        return LLMModelConfig(
+            llm_type=self._get_config_value(cfg.get('llm_type', 'azure_openai')),
+            model=self._get_config_value(cfg.get('model')),
+            api_key=self._get_config_value(cfg.get('api_key_env')),
+            endpoint=self._get_config_value(cfg.get('endpoint_env')),
+            api_version=self._get_config_value(cfg.get('api_version')),
+            auth_method=self._get_config_value(cfg.get('auth_method'), 'api_key'),
+            import_path=self._get_config_value(cfg.get('import_path')),
+            class_name=self._get_config_value(cfg.get('class_name'))
         )
 
     def _get_config_directory(self) -> str:

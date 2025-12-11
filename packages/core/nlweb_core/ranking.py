@@ -183,14 +183,15 @@ The user's question is: {request.query}. The item's description is {item.descrip
         try:
             prompt_str, ans_struc = self.get_ranking_prompt()
             description = trim_json(json_str)
-            
+
             # Populate the missing keys needed by the prompt template
             # The prompt template uses {request.query} and {site.itemType}
             self.handler.query_params["request.query"] = self.handler.query
             self.handler.query_params["site.itemType"] = "item"  # Default to "item" if not specified
-            
+
             prompt = fill_prompt_variables(prompt_str, self.handler.query_params, {"item.description": description})
-            ranking = await ask_llm(prompt, ans_struc, level=self.level, query_params=self.handler.query_params)
+            # Use 'scoring' level for ranking tasks
+            ranking = await ask_llm(prompt, ans_struc, level='scoring', query_params=self.handler.query_params)
 
             # Handle both string and dictionary inputs for json_str
             schema_object = json_str if isinstance(json_str, dict) else json.loads(json_str)

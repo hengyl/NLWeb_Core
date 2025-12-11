@@ -150,47 +150,56 @@ async def ask_llm(
 ) -> Dict[str, Any]:
     """
     Route an LLM request to the specified endpoint, with dispatch based on llm_type.
-    
+
     Args:
         prompt: The text prompt to send to the LLM
         schema: JSON schema that the response should conform to
-        provider: The LLM endpoint to use (if None, use preferred endpoint from config)
-        level: The model tier to use ('low' or 'high')
+        provider: The LLM endpoint to use (if None, use model config based on level)
+        level: The model tier to use ('low', 'high', or 'scoring')
         timeout: Request timeout in seconds
         query_params: Optional query parameters for development mode provider override
         max_length: Maximum length of the response in tokens (default: 512)
-        
+
     Returns:
         Parsed JSON response from the LLM
-        
+
     Raises:
         ValueError: If the endpoint is unknown or response cannot be parsed
         TimeoutError: If the request times out
     """
-    # Determine provider from parameter or config
-    provider_name = provider or CONFIG.preferred_llm_endpoint
+    # Get model config based on level (new format) or fall back to old format
+    model_config = None
+    model_id = None
+    llm_type = None
 
-    if provider_name not in CONFIG.llm_endpoints:
+    if level == 'high' and CONFIG.high_llm_model:
+        model_config = CONFIG.high_llm_model
+        model_id = model_config.model
+        llm_type = model_config.llm_type
+    elif level == 'low' and CONFIG.low_llm_model:
+        model_config = CONFIG.low_llm_model
+        model_id = model_config.model
+        llm_type = model_config.llm_type
+    elif level == 'scoring' and CONFIG.scoring_llm_model:
+        model_config = CONFIG.scoring_llm_model
+        model_id = model_config.model
+        llm_type = model_config.llm_type
+    elif CONFIG.preferred_llm_endpoint and CONFIG.preferred_llm_endpoint in CONFIG.llm_endpoints:
+        # Fall back to old format
+        provider_name = provider or CONFIG.preferred_llm_endpoint
+        provider_config = CONFIG.get_llm_provider(provider_name)
+        if not provider_config or not provider_config.models:
+            return {}
+        llm_type = provider_config.llm_type
+        model_id = getattr(provider_config.models, level if level in ['high', 'low'] else 'low')
+        model_config = provider_config
+    else:
         return {}
-
-    # Get provider config using the helper method
-    provider_config = CONFIG.get_llm_provider(provider_name)
-    if not provider_config or not provider_config.models:
-        return {}
-
-    # Get llm_type for dispatch
-    llm_type = provider_config.llm_type
-
-    model_id = getattr(provider_config.models, level)
-
-    # Initialize variables for exception handling
-    llm_type_for_error = llm_type
 
     try:
-
         # Get the provider instance based on llm_type
         try:
-            provider_instance = _get_provider(llm_type, provider_config)
+            provider_instance = _get_provider(llm_type, model_config)
         except ValueError as e:
             return {}
 
