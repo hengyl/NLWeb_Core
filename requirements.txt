@@ -6,6 +6,7 @@ nlweb-azure-vectordb>=0.5.4
 
 # Server dependencies
 gunicorn>=20.1.0
+aiohttp>=3.8.0
 aiohttp-cors>=0.7.0
 
 # Azure SDK for managed identity

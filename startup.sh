@@ -1,12 +1,12 @@
 #!/bin/bash
 # Startup script for Azure Web App
-# Note: Dependencies are installed automatically by Azure during deployment
 
-# Start the NLWeb server using gunicorn with aiohttp worker
-gunicorn nlweb_core.simple_server:create_app \
-  --bind=0.0.0.0:${PORT:-8000} \
-  --worker-class aiohttp.GunicornWebWorker \
-  --workers 1 \
-  --timeout 600 \
-  --access-logfile - \
-  --error-logfile -
+# Install all dependencies from PyPI
+pip install -r requirements.txt
+
+# Copy query_analysis.xml to the installed package location
+SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
+cp packages/core/nlweb_core/query_analysis/query_analysis.xml $SITE_PACKAGES/nlweb_core/query_analysis/
+
+# Start the NLWeb server
+python -m nlweb_network.server
