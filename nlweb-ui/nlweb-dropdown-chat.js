@@ -27,7 +27,10 @@ export class NLWebDropdownChat {
             inputId: config.inputId || 'chat-input',
             ...config
         };
-        
+
+        // Initialize conversation history for v0.54 context
+        this.conversationHistory = [];
+
         this.init();
     }
     
@@ -205,20 +208,42 @@ export class NLWebDropdownChat {
         // Add user message
         this.addMessage('user', query);
 
+        // Add to conversation history for v0.54 context
+        this.conversationHistory.push(query);
+
         // Show loading indicator
         const loadingMessage = this.addMessage('assistant', '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>');
 
-        // Send query to backend
+        // Build v0.54 request
+        const request = {
+            query: {
+                text: query,
+                ...(this.config.site && { site: this.config.site })
+            },
+            prefer: {
+                streaming: false,
+                response_format: 'conv_search'
+            },
+            meta: {
+                api_version: '0.54'
+            }
+        };
+
+        // Add conversation context if available
+        if (this.conversationHistory && this.conversationHistory.length > 0) {
+            request.context = {
+                '@type': 'ConversationalContext',
+                prev: this.conversationHistory.slice(-5) // Last 5 queries
+            };
+        }
+
+        // Send query to backend (v0.54 format)
         const response = await fetch(`${this.config.endpoint}/ask`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                query: query,
-                site: this.config.site,
-                conversation_id: this.currentConversationId || null
-            })
+            body: JSON.stringify(request)
         });
 
         if (!response.ok) {
@@ -262,7 +287,124 @@ export class NLWebDropdownChat {
         // Get the data either from preloaded or from response
         const data = preloadedData || await response.json();
 
-        // Parse the message using the SSE parser (it handles both formats)
+        // Handle v0.54 response types
+        if (data._meta && data._meta.response_type) {
+            switch (data._meta.response_type) {
+                case 'Answer':
+                    this.handleAnswerResponse(data);
+                    break;
+                case 'Elicitation':
+                    this.handleElicitationResponse(data);
+                    break;
+                case 'Promise':
+                    this.handlePromiseResponse(data);
+                    break;
+                case 'Failure':
+                    this.handleFailureResponse(data);
+                    break;
+                default:
+                    this.handleLegacyResponse(data);
+            }
+        } else {
+            // Legacy format
+            this.handleLegacyResponse(data);
+        }
+
+        // Handle conversation ID if present
+        if (data._meta && data._meta.session_context && data._meta.session_context.conversation_id) {
+            this.currentConversationId = data._meta.session_context.conversation_id;
+        }
+
+        // Scroll to show new content
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+
+        // Show follow-up input
+        this.showFollowUpInput();
+    }
+
+    handleAnswerResponse(data) {
+        // Create assistant message element
+        const messageElement = this.addMessage('assistant', '');
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.innerHTML = ''; // Clear any placeholder
+        }
+
+        // Extract results (handles both conv_search and chatgpt_app formats)
+        const results = data.results || data.structuredData || [];
+
+        // Display results
+        results.forEach(result => {
+            const resourceElement = NLWebSSEParser.createResourceElement(result);
+            contentDiv.appendChild(resourceElement);
+        });
+
+        // If no results, show message
+        if (results.length === 0) {
+            contentDiv.innerHTML = '<p>No results found.</p>';
+        }
+    }
+
+    handleElicitationResponse(data) {
+        const messageElement = this.addMessage('assistant', '');
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.innerHTML = '';
+        }
+
+        // Show elicitation text
+        const textP = document.createElement('p');
+        textP.textContent = data.elicitation.text;
+        contentDiv.appendChild(textP);
+
+        // Show questions
+        data.elicitation.questions.forEach(q => {
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'elicitation-question';
+
+            const questionText = document.createElement('strong');
+            questionText.textContent = q.text;
+            questionDiv.appendChild(questionText);
+
+            if (q.options) {
+                const optionsList = document.createElement('ul');
+                q.options.forEach(opt => {
+                    const li = document.createElement('li');
+                    li.textContent = opt;
+                    optionsList.appendChild(li);
+                });
+                questionDiv.appendChild(optionsList);
+            }
+
+            contentDiv.appendChild(questionDiv);
+        });
+    }
+
+    handlePromiseResponse(data) {
+        const messageElement = this.addMessage('assistant', '');
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.innerHTML = '';
+        }
+
+        const estimatedTime = data.promise.estimated_time
+            ? ` (estimated ${data.promise.estimated_time}s)`
+            : '';
+        contentDiv.innerHTML = `<p>Task started${estimatedTime}. Token: <code>${data.promise.token}</code></p>`;
+    }
+
+    handleFailureResponse(data) {
+        const messageElement = this.addMessage('assistant', '');
+        const contentDiv = messageElement.querySelector('.message-content');
+        if (contentDiv) {
+            contentDiv.innerHTML = '';
+        }
+
+        contentDiv.innerHTML = `<p class="error">Error (${data.error.code}): ${data.error.message}</p>`;
+    }
+
+    handleLegacyResponse(data) {
+        // Parse the message using the SSE parser (for old format)
         const parsed = NLWebSSEParser.parseMessage(data);
 
         // Create assistant message element
@@ -298,17 +440,6 @@ export class NLWebDropdownChat {
                 // Unknown format, show raw data
                 contentDiv.textContent = JSON.stringify(data, null, 2);
         }
-
-        // Handle conversation ID if present
-        if (data.conversation_id) {
-            this.currentConversationId = data.conversation_id;
-        }
-
-        // Scroll to show new content
-        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-
-        // Show follow-up input
-        this.showFollowUpInput();
     }
 
     async handleSSEResponse(response) {
@@ -404,21 +535,43 @@ export class NLWebDropdownChat {
         // Add user message
         this.addMessage('user', message);
 
+        // Add to conversation history for v0.54 context
+        this.conversationHistory.push(message);
+
         // Show loading indicator
         const loadingMessage = this.addMessage('assistant', '<div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>');
 
-        // Send to backend
+        // Build v0.54 request
+        const request = {
+            query: {
+                text: message,
+                ...(this.config.site && { site: this.config.site })
+            },
+            prefer: {
+                streaming: false,
+                response_format: 'conv_search'
+            },
+            meta: {
+                api_version: '0.54'
+            }
+        };
+
+        // Add conversation context
+        if (this.conversationHistory && this.conversationHistory.length > 0) {
+            request.context = {
+                '@type': 'ConversationalContext',
+                prev: this.conversationHistory.slice(-5) // Last 5 queries
+            };
+        }
+
+        // Send to backend (v0.54 format)
         try {
             const response = await fetch(`${this.config.endpoint}/ask`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    query: message,
-                    site: this.config.site,
-                    conversation_id: this.currentConversationId || null
-                })
+                body: JSON.stringify(request)
             });
 
             if (!response.ok) {
