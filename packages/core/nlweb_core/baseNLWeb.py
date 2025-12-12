@@ -40,6 +40,10 @@ class NLWebHandler(ABC):
         meta_dict = query_params.get('meta', {})
         self.meta = Meta(**meta_dict) if meta_dict else Meta()
 
+        # Extract mode from prefer.mode (comma-separated list like "list", "list,summarize", etc.)
+        mode_str = self.prefer.mode or 'list'
+        self.modes = [m.strip() for m in mode_str.split(',')]
+
         self.return_value = None
         self._meta = {
             'version': '0.54',
@@ -49,9 +53,9 @@ class NLWebHandler(ABC):
     async def runQuery(self):
         # Send metadata first
         await self.send_meta()
-
         await self.prepare()
         await self.runQueryBody()
+        await self.postResults()
         return self.return_value
 
     async def prepare(self):
@@ -199,3 +203,7 @@ class NLWebHandler(ABC):
     def get_param(self, param_name, param_type=str, default_value=None):
         """Get a parameter from query_params with type conversion."""
         return _get_param(self.query_params, param_name, param_type, default_value)
+    
+    async def postResults(self):
+        """Hook for any post-processing after main query body."""
+        pass

@@ -10,6 +10,7 @@ Backwards compatibility is not guaranteed at this time.
 
 from nlweb_core.baseNLWeb import NLWebHandler
 from nlweb_core.ranking import Ranking
+from nlweb_core.postQueryProcessing import PostQueryProcessing
 import asyncio
 
 
@@ -51,4 +52,7 @@ class NLWebRankingHandler(NLWebHandler):
         ranking = Ranking(self, self.retrieved_items)
         await ranking.do()
 
-   
+    async def postResults(self):
+        """Execute post-query processing (map detection, summarization, etc.)."""
+        post_processing = PostQueryProcessing(self)
+        await post_processing.do()
