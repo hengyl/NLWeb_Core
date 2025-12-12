@@ -308,6 +308,11 @@ class NLWebChat {
         this.renderMessages();
 
         try {
+            // Check if summarize checkbox is checked
+            const summarizeCheckbox = document.getElementById('summarize-checkbox');
+            const shouldSummarize = summarizeCheckbox && summarizeCheckbox.checked;
+            const mode = shouldSummarize ? 'list,summarize' : 'list';
+
             // Build v0.54 request
             const v054Request = {
                 query: {
@@ -318,7 +323,7 @@ class NLWebChat {
                 prefer: {
                     streaming: true,
                     response_format: 'conv_search',
-                    mode: 'list'
+                    mode: mode
                 },
                 meta: {
                     api_version: '0.54'
