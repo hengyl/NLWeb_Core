@@ -51,11 +51,11 @@ low-llm-model:
 
 # Scoring LLM model (for ranking/scoring tasks)
 scoring-llm-model:
-  llm_type: azure_ml
-  model: PiScorer
-  endpoint_env: PISCORER_ENDPOINT
-  api_key_env: PISCORER_API_KEY
-  api_version: "2024-05-01-preview"
+  llm_type: azure_openai
+  model: gpt-4.1-mini
+  endpoint_env: AZURE_OPENAI_ENDPOINT
+  api_key_env: AZURE_OPENAI_API_KEY
+  api_version: "2024-02-15-preview"
   auth_method: api_key
   import_path: nlweb_azure_models.llm.azure_oai
   class_name: provider

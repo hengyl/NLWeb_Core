@@ -208,7 +208,7 @@ The user's question is: {request.query}. The item's description is {item.descrip
                 "name": name,
                 "site": site,
                 "score": ranking.get("score", 0),
-                "description": ranking["description"],
+                "description": ranking.get("description", ""),
                 "sent": False
             }
 

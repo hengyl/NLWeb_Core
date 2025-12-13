@@ -584,10 +584,29 @@ class NLWebChat {
     renderResourceItem(data) {
         const container = document.createElement('div');
         container.className = 'item-container';
-        
+
         const content = document.createElement('div');
         content.className = 'item-content';
-        
+
+        // Handle Summary type differently
+        if (data['@type'] === 'Summary') {
+            const titleRow = document.createElement('div');
+            titleRow.className = 'item-title-row';
+            const title = document.createElement('div');
+            title.className = 'item-title-link';
+            title.textContent = 'Summary';
+            titleRow.appendChild(title);
+            content.appendChild(titleRow);
+
+            const summaryText = document.createElement('div');
+            summaryText.className = 'item-description';
+            summaryText.textContent = data.text;
+            content.appendChild(summaryText);
+
+            container.appendChild(content);
+            return container;
+        }
+
         // Title row with link
         const titleRow = document.createElement('div');
         titleRow.className = 'item-title-row';
@@ -598,7 +617,7 @@ class NLWebChat {
         titleLink.target = '_blank';
         titleRow.appendChild(titleLink);
         content.appendChild(titleRow);
-        
+
         // Site link
         if (data.site) {
             const siteLink = document.createElement('a');
@@ -607,7 +626,7 @@ class NLWebChat {
             siteLink.textContent = data.site;
             content.appendChild(siteLink);
         }
-        
+
         // Description
         if (data.description) {
             const description = document.createElement('div');
@@ -615,9 +634,9 @@ class NLWebChat {
             description.textContent = data.description;
             content.appendChild(description);
         }
-        
+
         container.appendChild(content);
-        
+
         // Image
         if (data.image) {
             const imgWrapper = document.createElement('div');
@@ -628,7 +647,7 @@ class NLWebChat {
             imgWrapper.appendChild(img);
             container.appendChild(imgWrapper);
         }
-        
+
         return container;
     }
 

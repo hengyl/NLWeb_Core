@@ -81,17 +81,35 @@ class AzureOpenAIProvider(LLMProvider):
         return default_model
 
     @classmethod
-    def get_client(cls) -> AsyncAzureOpenAI:
-        """Get or initialize the Azure OpenAI client."""
-        with cls._client_lock:  # Thread-safe client initialization
-            if cls._client is None:
-                endpoint = cls.get_azure_endpoint()
-                api_version = cls.get_api_version()
-                auth_method = cls.get_auth_method()
+    def get_client(cls, endpoint: Optional[str] = None, api_key: Optional[str] = None,
+                   api_version: Optional[str] = None, auth_method: Optional[str] = None) -> AsyncAzureOpenAI:
+        """
+        Get or initialize the Azure OpenAI client.
 
-                if not endpoint or not api_version:
-                    error_msg = "Missing required Azure OpenAI configuration (endpoint or api_version)"
-                    raise ValueError(error_msg)
+        Args:
+            endpoint: Azure OpenAI endpoint URL (overrides config)
+            api_key: API key (overrides config)
+            api_version: API version (overrides config)
+            auth_method: Authentication method (overrides config)
+
+        Returns:
+            Configured AsyncAzureOpenAI client
+        """
+        # Use provided parameters or fall back to config
+        endpoint = endpoint or cls.get_azure_endpoint()
+        api_version = api_version or cls.get_api_version()
+        auth_method = auth_method or cls.get_auth_method()
+        if api_key is None:
+            api_key = cls.get_api_key()
+
+        if not endpoint or not api_version:
+            error_msg = "Missing required Azure OpenAI configuration (endpoint or api_version)"
+            raise ValueError(error_msg)
+
+        # For parameter-based calls, create a new client each time (no caching)
+        with cls._client_lock:  # Thread-safe client initialization
+            if cls._client is None or endpoint != cls.get_azure_endpoint():
+                # Create new client
 
                 try:
                     if auth_method == "azure_ad":
@@ -107,7 +125,6 @@ class AzureOpenAIProvider(LLMProvider):
                             timeout=30.0
                         )
                     elif auth_method == "api_key":
-                        api_key = cls.get_api_key()
                         if not api_key:
                             error_msg = "Missing required Azure OpenAI API key for api_key authentication"
                             raise ValueError(error_msg)
@@ -181,32 +198,41 @@ class AzureOpenAIProvider(LLMProvider):
         max_tokens: int = 2048,
         timeout: float = 8.0,
         high_tier: bool = False,
+        endpoint: Optional[str] = None,
+        api_key: Optional[str] = None,
+        api_version: Optional[str] = None,
+        auth_method: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Get completion from Azure OpenAI.
-        
+
         Args:
             prompt: The prompt to send to the model
             schema: JSON schema for the expected response
-            model: Specific model to use (overrides configuration)
+            model: Specific model to use (required)
             temperature: Model temperature
             max_tokens: Maximum tokens in the generated response
             timeout: Request timeout in seconds
-            high_tier: Whether to use the high-tier model from config
+            high_tier: Whether to use the high-tier model from config (ignored if model specified)
+            endpoint: Azure OpenAI endpoint URL (required if not in config)
+            api_key: API key (required if auth_method is 'api_key' and not in config)
+            api_version: API version (required if not in config)
+            auth_method: Authentication method ('api_key' or 'azure_ad', defaults to 'api_key')
             **kwargs: Additional provider-specific arguments
-            
+
         Returns:
             Parsed JSON response
-            
+
         Raises:
             ValueError: If the response cannot be parsed as valid JSON
             TimeoutError: If the request times out
         """
         # Use specified model or get from config based on tier
         model_to_use = model if model else self.get_model_from_config(high_tier)
-        
-        client = self.get_client()
+
+        # Get client with passed parameters or fall back to config
+        client = self.get_client(endpoint=endpoint, api_key=api_key, api_version=api_version, auth_method=auth_method)
         system_prompt = f"""Provide a response that matches this JSON schema: {json.dumps(schema)}"""
         
         
@@ -223,7 +249,8 @@ class AzureOpenAIProvider(LLMProvider):
                     stream=False,
                     presence_penalty=0.0,
                     frequency_penalty=0.0,
-                    model=model_to_use
+                    model=model_to_use,
+                    response_format={"type": "json_object"}
                 ),
                 timeout=timeout
             )

@@ -1,0 +1,7 @@
+{
+  "promise_token": "promise_xyz789",
+  "action": "checkin",
+  "meta": {
+    "api_version": "0.54"
+  }
+}

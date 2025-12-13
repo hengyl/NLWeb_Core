@@ -203,10 +203,20 @@ async def ask_llm(
         except ValueError as e:
             return {}
 
-        # Simply call the provider's get_completion method without locking
+        # Simply call the provider's get_completion method, passing all config parameters
         # Each provider should handle thread-safety internally
         result = await asyncio.wait_for(
-            provider_instance.get_completion(prompt, schema, model=model_id, timeout=timeout, max_tokens=max_length),
+            provider_instance.get_completion(
+                prompt,
+                schema,
+                model=model_id,
+                timeout=timeout,
+                max_tokens=max_length,
+                endpoint=model_config.endpoint if hasattr(model_config, 'endpoint') else None,
+                api_key=model_config.api_key if hasattr(model_config, 'api_key') else None,
+                api_version=model_config.api_version if hasattr(model_config, 'api_version') else None,
+                auth_method=model_config.auth_method if hasattr(model_config, 'auth_method') else None
+            ),
             timeout=timeout
         )
         return result

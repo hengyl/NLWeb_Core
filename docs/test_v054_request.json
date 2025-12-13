@@ -1,0 +1,29 @@
+{
+  "query": {
+    "text": "best protein-rich recipes with cinnamon",
+    "site": "pumpkins-r-us.com",
+    "itemType": "Recipe",
+    "location": "Idaho",
+    "price": "less than $20"
+  },
+  "context": {
+    "@type": "ConversationalContext",
+    "prev": ["breakfast muffins", "high fiber snacks"],
+    "text": "User has been looking at different healthy options for a party",
+    "memory": ["vegetarian", "has a sweet tooth", "prefers organic ingredients"]
+  },
+  "prefer": {
+    "streaming": false,
+    "response_format": "conv_search",
+    "mode": "list",
+    "accept-language": "en",
+    "user-agent": "TestClient/1.0"
+  },
+  "meta": {
+    "api_version": "0.54",
+    "session_context": {
+      "conversation_id": "conv_12345",
+      "state_token": "encrypted_state_abc123"
+    }
+  }
+}
