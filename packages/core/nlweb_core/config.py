@@ -318,6 +318,26 @@ class AppConfig:
             self.retrieval_endpoints = {}
             self.write_endpoint = None
 
+        # Load conversation storage config from unified file
+        if 'conversation_storage' in config:
+            conv_cfg = config['conversation_storage']
+            self.conversation_storage = ConversationStorageConfig(
+                type=conv_cfg.get('type', 'qdrant'),
+                enabled=conv_cfg.get('enabled', True),
+                url=self._get_config_value(conv_cfg.get('url_env')) if 'url_env' in conv_cfg else conv_cfg.get('url'),
+                api_key=self._get_config_value(conv_cfg.get('api_key_env')) if 'api_key_env' in conv_cfg else conv_cfg.get('api_key'),
+                database_path=self._resolve_path(conv_cfg['database_path']) if 'database_path' in conv_cfg else None,
+                collection_name=conv_cfg.get('collection_name', 'nlweb_conversations')
+            )
+        else:
+            # Default conversation storage config
+            self.conversation_storage = ConversationStorageConfig(
+                type="qdrant",
+                enabled=False,
+                database_path=self._resolve_path("../data/conversations_db"),
+                collection_name="nlweb_conversations"
+            )
+
         # Set defaults for other configs (not in unified format yet)
         self.port = config.get('port', 8080)
         self.static_directory = config.get('static_directory', "./static")

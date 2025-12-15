@@ -59,3 +59,10 @@ scoring-llm-model:
   auth_method: api_key
   import_path: nlweb_azure_models.llm.azure_oai
   class_name: provider
+
+# Conversation storage configuration
+conversation_storage:
+  type: qdrant
+  enabled: true
+  database_path: ./data/conversations_db
+  collection_name: nlweb_conversations
