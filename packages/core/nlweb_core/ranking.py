@@ -24,10 +24,26 @@ def log(message):
 # for indexing or ranking. Further, many pages are just collections that we don't
 # want to index at all. We can also skip things like Breadcrumbs
 
-skip_types = ["ListItem", "ItemList", "Organization", "BreadcrumbList", "Breadcrumb", "WebSite",
-              "SearchAction", "SiteNavigationElement", "WebPageElement", "WebPage", "NewsMediaOrganization",
-              "MerchantReturnPolicy", "ReturnPolicy", "CollectionPage", "Brand", "Corporation",
-              "SiteNavigationElement", "ReadAction"]
+skip_types = [
+    "ListItem",
+    "ItemList",
+    "Organization",
+    "BreadcrumbList",
+    "Breadcrumb",
+    "WebSite",
+    "SearchAction",
+    "SiteNavigationElement",
+    "WebPageElement",
+    "WebPage",
+    "NewsMediaOrganization",
+    "MerchantReturnPolicy",
+    "ReturnPolicy",
+    "CollectionPage",
+    "Brand",
+    "Corporation",
+    "SiteNavigationElement",
+    "ReadAction",
+]
 
 skip_properties = ["publisher", "mainEntityOfPage"]
 
@@ -56,9 +72,9 @@ def trim_schema_json_graph(schema_json, site):
     trimmed_items = []
     pruned = []
     for item in schema_json:
-        if (not should_skip_item(site, item) and "@type" in item):
+        if not should_skip_item(site, item) and "@type" in item:
             item_type = item["@type"]
-            if (item_type in leaf_types):
+            if item_type in leaf_types:
                 ss = trim_schema_json_item(item, site)
                 return [trim_schema_json_item(item, site)]
     for item in schema_json:
@@ -84,9 +100,9 @@ def trim_schema_json_item(schema_json, site):
     """
     if schema_json is None:
         return None
-    elif (isinstance(schema_json, dict) and "@graph" in schema_json):
+    elif isinstance(schema_json, dict) and "@graph" in schema_json:
         trimmed_items = trim_schema_json_graph(schema_json["@graph"], site)
-        if (len(trimmed_items) > 0):
+        if len(trimmed_items) > 0:
             return trimmed_items
         else:
             return None
@@ -94,14 +110,14 @@ def trim_schema_json_item(schema_json, site):
         trimmed_items = []
         for item in schema_json:
             elt = trim_schema_json_item(item, site)
-            if (elt):
+            if elt:
                 trimmed_items.append(elt)
-        if (len(trimmed_items) > 0):
+        if len(trimmed_items) > 0:
             return trimmed_items
         else:
             return None
     elif isinstance(schema_json, dict):
-        if (should_skip_item(site, schema_json)):
+        if should_skip_item(site, schema_json):
             return None
         else:
             retval = {}
@@ -117,7 +133,12 @@ def trim_schema_json_item(schema_json, site):
                         continue
 
                 # Rule 3: If property is image and value is an ImageObject, pick the URL
-                if k == "image" and isinstance(v, dict) and v.get("@type") == "ImageObject" and "url" in v:
+                if (
+                    k == "image"
+                    and isinstance(v, dict)
+                    and v.get("@type") == "ImageObject"
+                    and "url" in v
+                ):
                     retval[k] = v["url"]
                     continue
 
@@ -127,14 +148,22 @@ def trim_schema_json_item(schema_json, site):
                     continue
 
                 # Rule 5: If value is aggregateRating, pick the ratingValue
-                if k == "aggregateRating" and isinstance(v, dict) and "ratingValue" in v:
+                if (
+                    k == "aggregateRating"
+                    and isinstance(v, dict)
+                    and "ratingValue" in v
+                ):
                     retval[k] = v["ratingValue"]
                     continue
 
                 # Rule 6: If property is review and value is a list, pick up to 3 longest reviewBodies
                 if k == "review" and isinstance(v, list):
                     reviews = []
-                    review_bodies = [(r.get("reviewBody", ""), r) for r in v if isinstance(r, dict) and "reviewBody" in r]
+                    review_bodies = [
+                        (r.get("reviewBody", ""), r)
+                        for r in v
+                        if isinstance(r, dict) and "reviewBody" in r
+                    ]
                     # Sort by length of reviewBody in descending order
                     review_bodies.sort(key=lambda x: len(x[0]), reverse=True)
                     # Take up to 3 longest reviews
@@ -152,26 +181,30 @@ def trim_schema_json_item(schema_json, site):
 
 
 class Ranking:
-     
+
     EARLY_SEND_THRESHOLD = 69
     NUM_RESULTS_TO_SEND = 10
 
     # This is the default ranking prompt, in case, for some reason, we can't find the site_type.xml file.
-    RANKING_PROMPT = ["""  Assign a score between 0 and 100 to the following {site.itemType}
+    RANKING_PROMPT = [
+        """  Assign a score between 0 and 100 to the following {site.itemType}
 based on how relevant it is to the user's question. Use your knowledge from other sources, about the item, to make a judgement.
 If the score is above 50, provide a short description of the item highlighting the relevance to the user's question, without mentioning the user's question.
 Provide an explanation of the relevance of the item to the user's question, without mentioning the user's question or the score or explicitly mentioning the term relevance.
 If the score is below 75, in the description, include the reason why it is still relevant.
 The user's question is: {request.query}. The item's description is {item.description}""",
-    {"score" : "integer between 0 and 100",
- "description" : "short description of the item"}]
- 
+        {
+            "score": "integer between 0 and 100",
+            "description": "short description of the item",
+        },
+    ]
+
     RANKING_PROMPT_NAME = "RankingPrompt"
-     
+
     def get_ranking_prompt(self):
         # Use default ranking prompt
         return self.RANKING_PROMPT[0], self.RANKING_PROMPT[1]
-        
+
     def __init__(self, handler, items, level="low"):
         self.handler = handler
         self.level = level
@@ -187,14 +220,26 @@ The user's question is: {request.query}. The item's description is {item.descrip
             # Populate the missing keys needed by the prompt template
             # The prompt template uses {request.query} and {site.itemType}
             self.handler.query_params["request.query"] = self.handler.query
-            self.handler.query_params["site.itemType"] = "item"  # Default to "item" if not specified
+            self.handler.query_params["site.itemType"] = (
+                "item"  # Default to "item" if not specified
+            )
+            self.handler.query_params["item.description"] = description
 
-            prompt = fill_prompt_variables(prompt_str, self.handler.query_params, {"item.description": description})
+            prompt = fill_prompt_variables(
+                prompt_str, self.handler.query_params, {"item.description": description}
+            )
             # Use 'scoring' level for ranking tasks
-            ranking = await ask_llm(prompt, ans_struc, level='scoring', query_params=self.handler.query_params)
+            ranking = await ask_llm(
+                prompt,
+                ans_struc,
+                level="scoring",
+                query_params=self.handler.query_params,
+            )
 
             # Handle both string and dictionary inputs for json_str
-            schema_object = json_str if isinstance(json_str, dict) else json.loads(json_str)
+            schema_object = (
+                json_str if isinstance(json_str, dict) else json.loads(json_str)
+            )
 
             # If schema_object is an array, set it to the first item
             if isinstance(schema_object, list) and len(schema_object) > 0:
@@ -209,7 +254,7 @@ The user's question is: {request.query}. The item's description is {item.descrip
                 "site": site,
                 "score": ranking.get("score", 0),
                 "description": ranking.get("description", ""),
-                "sent": False
+                "sent": False,
             }
 
             # Add all attributes from schema_object except url
@@ -226,7 +271,7 @@ The user's question is: {request.query}. The item's description is {item.descrip
             self.rankedAnswers.append(result)
 
             # Send immediately if score is high enough
-            if (result["score"] > self.EARLY_SEND_THRESHOLD):
+            if result["score"] > self.EARLY_SEND_THRESHOLD:
                 try:
                     if not self.handler.connection_alive_event.is_set():
                         return
@@ -235,7 +280,9 @@ The user's question is: {request.query}. The item's description is {item.descrip
                     await self.handler.pre_checks_done_event.wait()
 
                     # Get max_results from handler
-                    max_results = self.handler.get_param('max_results', int, self.NUM_RESULTS_TO_SEND)
+                    max_results = self.handler.get_param(
+                        "max_results", int, self.NUM_RESULTS_TO_SEND
+                    )
 
                     # Check if we can still send more results
                     if self.num_results_sent < max_results:
@@ -249,12 +296,13 @@ The user's question is: {request.query}. The item's description is {item.descrip
 
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             # Import here to avoid circular import
             from nlweb_core.config import CONFIG
+
             if CONFIG.should_raise_exceptions():
                 raise  # Re-raise in testing/development mode
-
 
     async def sendRemainingAnswers(self, answers):
         """Send remaining answers that weren't sent early."""
@@ -265,7 +313,9 @@ The user's question is: {request.query}. The item's description is {item.descrip
         await self.handler.pre_checks_done_event.wait()
 
         # Get max_results from handler
-        max_results = self.handler.get_param('max_results', int, self.NUM_RESULTS_TO_SEND)
+        max_results = self.handler.get_param(
+            "max_results", int, self.NUM_RESULTS_TO_SEND
+        )
 
         # Filter unsent results
         unsent = [r for r in answers if not r["sent"]]
@@ -292,14 +342,19 @@ The user's question is: {request.query}. The item's description is {item.descrip
                 self.handler.connection_alive_event.clear()
             except Exception as e:
                 import traceback
+
                 traceback.print_exc()
                 self.handler.connection_alive_event.clear()
 
     async def do(self):
         tasks = []
         for url, json_str, name, site in self.items:
-            if self.handler.connection_alive_event.is_set():  # Only add new tasks if connection is still alive
-                tasks.append(asyncio.create_task(self.rankItem(url, json_str, name, site)))
+            if (
+                self.handler.connection_alive_event.is_set()
+            ):  # Only add new tasks if connection is still alive
+                tasks.append(
+                    asyncio.create_task(self.rankItem(url, json_str, name, site))
+                )
 
         try:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -313,12 +368,14 @@ The user's question is: {request.query}. The item's description is {item.descrip
         await self.handler.pre_checks_done_event.wait()
 
         # Use min_score from handler if available, otherwise default to 51
-        min_score_threshold = self.handler.get_param('min_score', int, 51)
+        min_score_threshold = self.handler.get_param("min_score", int, 51)
         # Use max_results from handler if available, otherwise use NUM_RESULTS_TO_SEND
-        max_results = self.handler.get_param('max_results', int, self.NUM_RESULTS_TO_SEND)
+        max_results = self.handler.get_param(
+            "max_results", int, self.NUM_RESULTS_TO_SEND
+        )
 
         # Filter and sort by score
-        filtered = [r for r in self.rankedAnswers if r['score'] > min_score_threshold]
+        filtered = [r for r in self.rankedAnswers if r["score"] > min_score_threshold]
 
         ranked = sorted(filtered, key=lambda x: x["score"], reverse=True)
         self.handler.final_ranked_answers = ranked[:max_results]

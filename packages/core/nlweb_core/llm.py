@@ -36,7 +36,7 @@ class LLMProvider(ABC):
         temperature: float = 0.7,
         max_tokens: int = 2048,
         timeout: float = 30.0,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Send a completion request to the LLM provider and return the parsed response.
@@ -61,7 +61,7 @@ class LLMProvider(ABC):
 
     @classmethod
     @abstractmethod
-    def get_client(cls):
+    def get_client(cls) -> Any:
         """
         Get or initialize the client for this provider.
         Returns a client instance ready to make API calls.
@@ -88,8 +88,10 @@ class LLMProvider(ABC):
         """
         pass
 
+
 # Cache for loaded providers
 _loaded_providers = {}
+
 
 def init():
     """Initialize LLM providers based on configuration."""
@@ -135,9 +137,12 @@ def _get_provider(llm_type: str, provider_config=None):
         except (ImportError, AttributeError) as e:
             raise ValueError(f"Failed to load provider for {llm_type}: {e}")
     else:
-        raise ValueError(f"No import_path and class_name configured for LLM type: {llm_type}")
+        raise ValueError(
+            f"No import_path and class_name configured for LLM type: {llm_type}"
+        )
 
     return _loaded_providers[llm_type]
+
 
 async def ask_llm(
     prompt: str,
@@ -146,7 +151,7 @@ async def ask_llm(
     level: str = "low",
     timeout: int = 8,
     query_params: Optional[Dict[str, Any]] = None,
-    max_length: int = 512
+    max_length: int = 512,
 ) -> Dict[str, Any]:
     """
     Route an LLM request to the specified endpoint, with dispatch based on llm_type.
@@ -172,26 +177,31 @@ async def ask_llm(
     model_id = None
     llm_type = None
 
-    if level == 'high' and CONFIG.high_llm_model:
+    if level == "high" and CONFIG.high_llm_model:
         model_config = CONFIG.high_llm_model
         model_id = model_config.model
         llm_type = model_config.llm_type
-    elif level == 'low' and CONFIG.low_llm_model:
+    elif level == "low" and CONFIG.low_llm_model:
         model_config = CONFIG.low_llm_model
         model_id = model_config.model
         llm_type = model_config.llm_type
-    elif level == 'scoring' and CONFIG.scoring_llm_model:
+    elif level == "scoring" and CONFIG.scoring_llm_model:
         model_config = CONFIG.scoring_llm_model
         model_id = model_config.model
         llm_type = model_config.llm_type
-    elif CONFIG.preferred_llm_endpoint and CONFIG.preferred_llm_endpoint in CONFIG.llm_endpoints:
+    elif (
+        CONFIG.preferred_llm_endpoint
+        and CONFIG.preferred_llm_endpoint in CONFIG.llm_endpoints
+    ):
         # Fall back to old format
         provider_name = provider or CONFIG.preferred_llm_endpoint
         provider_config = CONFIG.get_llm_provider(provider_name)
         if not provider_config or not provider_config.models:
             return {}
         llm_type = provider_config.llm_type
-        model_id = getattr(provider_config.models, level if level in ['high', 'low'] else 'low')
+        model_id = getattr(
+            provider_config.models, level if level in ["high", "low"] else "low"
+        )
         model_config = provider_config
     else:
         return {}
@@ -203,6 +213,9 @@ async def ask_llm(
         except ValueError as e:
             return {}
 
+        print("ABOUT TO CALL", provider_instance, model_id)
+        print("LEVEL", level)
+        print("MODEL CONFIG", model_config)
         # Simply call the provider's get_completion method, passing all config parameters
         # Each provider should handle thread-safety internally
         result = await asyncio.wait_for(
@@ -212,12 +225,25 @@ async def ask_llm(
                 model=model_id,
                 timeout=timeout,
                 max_tokens=max_length,
-                endpoint=model_config.endpoint if hasattr(model_config, 'endpoint') else None,
-                api_key=model_config.api_key if hasattr(model_config, 'api_key') else None,
-                api_version=model_config.api_version if hasattr(model_config, 'api_version') else None,
-                auth_method=model_config.auth_method if hasattr(model_config, 'auth_method') else None
+                endpoint=(
+                    model_config.endpoint if hasattr(model_config, "endpoint") else None
+                ),
+                api_key=(
+                    model_config.api_key if hasattr(model_config, "api_key") else None
+                ),
+                api_version=(
+                    model_config.api_version
+                    if hasattr(model_config, "api_version")
+                    else None
+                ),
+                auth_method=(
+                    model_config.auth_method
+                    if hasattr(model_config, "auth_method")
+                    else None
+                ),
+                **(query_params or {}),
             ),
-            timeout=timeout
+            timeout=timeout,
         )
         return result
 
@@ -225,6 +251,7 @@ async def ask_llm(
         return {}
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return {}
 
@@ -232,19 +259,24 @@ async def ask_llm(
 def get_available_providers() -> list:
     """
     Get a list of LLM providers that have their required API keys available.
-    
+
     Returns:
         List of provider names that are available for use.
     """
     available_providers = []
-    
+
     for provider_name, provider_config in CONFIG.llm_endpoints.items():
         # Check if provider config exists and has required fields
-        if (provider_config and 
-            hasattr(provider_config, 'api_key') and provider_config.api_key and 
-            provider_config.api_key.strip() != "" and
-            hasattr(provider_config, 'models') and provider_config.models and
-            provider_config.models.high and provider_config.models.low):
+        if (
+            provider_config
+            and hasattr(provider_config, "api_key")
+            and provider_config.api_key
+            and provider_config.api_key.strip() != ""
+            and hasattr(provider_config, "models")
+            and provider_config.models
+            and provider_config.models.high
+            and provider_config.models.low
+        ):
             available_providers.append(provider_name)
-    
+
     return available_providers
