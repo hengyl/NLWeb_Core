@@ -62,7 +62,10 @@ scoring-llm-model:
 
 # Conversation storage configuration
 conversation_storage:
-  type: qdrant
+  type: cosmos
   enabled: true
-  database_path: ./data/conversations_db
-  collection_name: nlweb_conversations
+  endpoint_env: AZURE_COSMOS_ENDPOINT
+  api_key_env: AZURE_COSMOS_API_KEY
+  database_name: nlweb
+  container_name: conversations
+  partition_key: /conversation_id

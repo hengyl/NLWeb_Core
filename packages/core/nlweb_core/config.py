@@ -324,10 +324,18 @@ class AppConfig:
             self.conversation_storage = ConversationStorageConfig(
                 type=conv_cfg.get('type', 'qdrant'),
                 enabled=conv_cfg.get('enabled', True),
+                # Support both URL and endpoint
                 url=self._get_config_value(conv_cfg.get('url_env')) if 'url_env' in conv_cfg else conv_cfg.get('url'),
+                endpoint=self._get_config_value(conv_cfg.get('endpoint_env')) if 'endpoint_env' in conv_cfg else conv_cfg.get('endpoint'),
+                # API key
                 api_key=self._get_config_value(conv_cfg.get('api_key_env')) if 'api_key_env' in conv_cfg else conv_cfg.get('api_key'),
+                # Database/collection names
                 database_path=self._resolve_path(conv_cfg['database_path']) if 'database_path' in conv_cfg else None,
-                collection_name=conv_cfg.get('collection_name', 'nlweb_conversations')
+                collection_name=conv_cfg.get('collection_name'),
+                database_name=conv_cfg.get('database_name'),
+                container_name=conv_cfg.get('container_name'),
+                # Partition key for Cosmos DB
+                partition_key=conv_cfg.get('partition_key')
             )
         else:
             # Default conversation storage config
