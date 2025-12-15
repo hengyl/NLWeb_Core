@@ -11,15 +11,20 @@ Backwards compatibility is not guaranteed at this time.
 
 from abc import ABC, abstractmethod
 import asyncio
+import uuid
+from datetime import datetime
+from typing import Optional
 from nlweb_core.query_analysis.query_analysis import DefaultQueryAnalysisHandler, QueryAnalysisHandler, query_analysis_tree
 from nlweb_core.utils import get_param as _get_param
-from nlweb_core.protocol.models import Query, Context, Prefer, Meta
+from nlweb_core.protocol.models import Query, Context, Prefer, Meta, AskRequest
+from nlweb_core.config import CONFIG
 
 class NLWebHandler(ABC):
 
     def __init__(self, query_params, output_method):
 
         self.output_method = output_method
+        self.query_params_raw = query_params  # Store raw params for conversation storage
 
         # Parse v0.54 request structure into protocol objects
         # Query object (required)
@@ -43,6 +48,12 @@ class NLWebHandler(ABC):
         # Extract mode from prefer.mode (comma-separated list like "list", "list,summarize", etc.)
         mode_str = self.prefer.mode or 'list'
         self.modes = [m.strip() for m in mode_str.split(',')]
+
+        # Conversation tracking
+        self.conversation_id = self._get_or_create_conversation_id()
+        self.user_id = self._get_user_id()
+        self.conversation_storage = None
+        self._init_conversation_storage()
 
         self.return_value = None
         self._meta = {
@@ -207,3 +218,95 @@ class NLWebHandler(ABC):
     async def postResults(self):
         """Hook for any post-processing after main query body."""
         pass
+
+    # ============ Conversation Storage Methods ============
+
+    def _get_or_create_conversation_id(self) -> str:
+        """Get conversation_id from meta.session_context or create new one."""
+        if (self.meta and
+            self.meta.session_context and
+            self.meta.session_context.conversation_id):
+            return self.meta.session_context.conversation_id
+        return str(uuid.uuid4())
+
+    def _get_user_id(self) -> Optional[str]:
+        """Extract user_id from meta.user if available."""
+        if self.meta and hasattr(self.meta, 'user') and self.meta.user:
+            # meta.user is expected to be an object with user identifier
+            if isinstance(self.meta.user, dict):
+                return self.meta.user.get('id') or self.meta.user.get('user_id')
+            elif hasattr(self.meta.user, 'id'):
+                return self.meta.user.id
+        return None
+
+    def _init_conversation_storage(self):
+        """Initialize conversation storage if enabled."""
+        if not hasattr(CONFIG, 'conversation_storage'):
+            return
+
+        if not CONFIG.conversation_storage.enabled:
+            return
+
+        try:
+            from nlweb_core.conversation.storage import ConversationStorageClient
+            self.conversation_storage = ConversationStorageClient()
+        except Exception as e:
+            # If storage init fails, just continue without it
+            pass
+
+    async def save_user_message(self):
+        """Save the user's query message to conversation storage."""
+        if not self.conversation_storage:
+            return
+
+        try:
+            from nlweb_core.conversation.models import ConversationMessage
+
+            # Build AskRequest from raw params
+            request = AskRequest(**self.query_params_raw)
+
+            message = ConversationMessage(
+                message_id=str(uuid.uuid4()),
+                conversation_id=self.conversation_id,
+                role="user",
+                timestamp=datetime.utcnow(),
+                request=request,
+                metadata={
+                    "user_id": self.user_id,
+                    "site": getattr(self.query, 'site', None)
+                }
+            )
+
+            await self.conversation_storage.store_message(message)
+        except Exception as e:
+            # Don't fail the query if storage fails
+            pass
+
+    async def save_assistant_message(self, results: list):
+        """Save the assistant's results to conversation storage."""
+        if not self.conversation_storage:
+            return
+
+        try:
+            from nlweb_core.conversation.models import ConversationMessage
+            from nlweb_core.protocol.models import ResultObject
+
+            # Convert result dicts to ResultObject models
+            result_objects = [ResultObject(**r) if isinstance(r, dict) else r for r in results]
+
+            message = ConversationMessage(
+                message_id=str(uuid.uuid4()),
+                conversation_id=self.conversation_id,
+                role="assistant",
+                timestamp=datetime.utcnow(),
+                results=result_objects,
+                metadata={
+                    "user_id": self.user_id,
+                    "response_format": self.prefer.response_format
+                }
+            )
+
+            await self.conversation_storage.store_message(message)
+        except Exception as e:
+            # Don't fail the query if storage fails
+            pass

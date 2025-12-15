@@ -342,6 +342,78 @@ async def mcp_handler(request):
         }, status=500)
 
 
+async def conversations_handler(request):
+    """
+    Handle conversation-related requests:
+    - GET /conversations - List conversations for a user
+    - GET /conversations/{id} - Get messages for a conversation
+    - DELETE /conversations/{id} - Delete a conversation
+    """
+    try:
+        from nlweb_core.conversation.storage import ConversationStorageClient
+
+        # Check if conversation storage is enabled
+        if not hasattr(CONFIG, 'conversation_storage') or not CONFIG.conversation_storage.enabled:
+            return web.json_response(
+                {"error": "Conversation storage is not enabled"},
+                status=503
+            )
+
+        storage = ConversationStorageClient()
+
+        # Extract conversation ID from path if present
+        conversation_id = request.match_info.get('id')
+
+        if request.method == 'DELETE' and conversation_id:
+            # Delete conversation
+            await storage.delete_conversation(conversation_id)
+            return web.json_response({"status": "deleted", "conversation_id": conversation_id})
+
+        elif request.method == 'GET' and conversation_id:
+            # Get messages for a conversation
+            limit = int(request.query.get('limit', '100'))
+            messages = await storage.get_messages(conversation_id, limit=limit)
+
+            # Convert to JSON-serializable format
+            messages_json = [msg.model_dump(mode='json') for msg in messages]
+
+            return web.json_response({
+                "conversation_id": conversation_id,
+                "messages": messages_json,
+                "count": len(messages_json)
+            })
+
+        elif request.method == 'GET':
+            # List conversations for a user
+            user_id = request.query.get('user_id')
+            if not user_id:
+                return web.json_response(
+                    {"error": "user_id parameter is required"},
+                    status=400
+                )
+
+            limit = int(request.query.get('limit', '20'))
+            conversation_ids = await storage.get_user_conversations(user_id, limit=limit)
+
+            return web.json_response({
+                "user_id": user_id,
+                "conversations": conversation_ids,
+                "count": len(conversation_ids)
+            })
+
+        else:
+            return web.json_response(
+                {"error": "Method not allowed"},
+                status=405
+            )
+
+    except Exception as e:
+        return web.json_response(
+            {"error": str(e)},
+            status=500
+        )
+
+
 def create_app():
     """Create and configure the aiohttp application."""
     app = web.Application()
@@ -350,6 +422,11 @@ def create_app():
     app.router.add_get('/ask', ask_handler)
     app.router.add_post('/ask', ask_handler)
     app.router.add_get('/health', health_handler)
+
+    # Conversation management endpoints
+    app.router.add_get('/conversations', conversations_handler)
+    app.router.add_get('/conversations/{id}', conversations_handler)
+    app.router.add_delete('/conversations/{id}', conversations_handler)
 
     # MCP endpoint (JSON-RPC 2.0) - support both POST and GET (for SSE)
     app.router.add_get('/mcp', mcp_handler)
