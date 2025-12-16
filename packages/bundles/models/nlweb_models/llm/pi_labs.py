@@ -12,16 +12,14 @@ class PiLabsClient:
     It lazily initializes the client it will use to make requests."""
 
     _client: httpx.AsyncClient
-    _concurrency_limit: asyncio.Semaphore
     _url: str
 
     def __init__(self, url: str = "http://localhost:8001/invocations"):
         self._url = url
         self._client = httpx.AsyncClient(
             http2=True,
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=30),
         )
-        self._concurrency_limit = asyncio.Semaphore(5)
 
     async def score(
         self,
@@ -30,18 +28,17 @@ class PiLabsClient:
         scoring_spec: list[dict[str, Any]],
         timeout: float = 30.0,
     ) -> float:
-        async with self._concurrency_limit:
-            resp = await self._client.post(
-                url=self._url,
-                json={
-                    "llm_input": llm_input,
-                    "llm_output": llm_output,
-                    "scoring_spec": scoring_spec,
-                },
-                timeout=timeout,
-            )
-            resp.raise_for_status()
-            return resp.json().get("total_score", 0) * 100
+        resp = await self._client.post(
+            url=self._url,
+            json={
+                "llm_input": llm_input,
+                "llm_output": llm_output,
+                "scoring_spec": scoring_spec,
+            },
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json().get("total_score", 0) * 100
 
 
 class PiLabsProvider(LLMProvider):
