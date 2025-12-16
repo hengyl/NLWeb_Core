@@ -213,9 +213,6 @@ async def ask_llm(
         except ValueError as e:
             return {}
 
-        print("ABOUT TO CALL", provider_instance, model_id)
-        print("LEVEL", level)
-        print("MODEL CONFIG", model_config)
         # Simply call the provider's get_completion method, passing all config parameters
         # Each provider should handle thread-safety internally
         result = await asyncio.wait_for(
